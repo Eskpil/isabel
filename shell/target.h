@@ -20,7 +20,7 @@ class Target {
   friend class Application;
   friend class Window;
 
-  Target();
+  Target(std::string_view, std::string_view);
 
   void run();
 private:

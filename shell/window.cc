@@ -102,7 +102,8 @@ const struct aylin_shell_listener Window::k_window_listener = {
         },
 };
 
-Window::Window(shell::WindowOptions options) : Target(), m_options(options) {}
+Window::Window(shell::WindowOptions options) : Target(options.flutter_assets_path, options.icudtl_path), m_options(options) {
+}
 
 void Window::configure(shell::Application *app) {
   m_application = app;
