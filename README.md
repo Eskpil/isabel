@@ -1,5 +1,7 @@
 # Isabel
 
+![Example](./assets/demo-screenshot.png)
+
 Flutter is an awesome framework with an even better ecosystem. Currently, it's builtin linux support is lacking since it
 builds on [GTK](https://gtk.org). GTK is great if you are just trying to ship something on linux but when your 
 priorities are linux and more specifically wayland. You start to become frustrated.
