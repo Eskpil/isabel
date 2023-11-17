@@ -36,8 +36,10 @@ Target::Target() {
 
   FlutterProjectArgs args = {
       .struct_size = sizeof(FlutterProjectArgs),
-      .assets_path = "/home/beta/Repos/github.com/flutter-engine/src/flutter/examples/glfw/debug/myapp/build/flutter_assets/",
-      .icu_data_path = "/home/beta/Repos/github.com/flutter-engine/src/out/host_debug_unopt/icudtl.dat",  // Find this in your bin/cache directory.
+      //.assets_path = "/home/beta/Repos/github.com/flutter-engine/src/flutter/examples/glfw/debug/myapp/build/flutter_assets/",
+      //.icu_data_path = "/home/beta/Repos/github.com/flutter-engine/src/out/host_debug_unopt/icudtl.dat",  // Find this in your bin/cache directory.
+      .assets_path = "../example/flutter_assets",
+      .icu_data_path = "../example/icudtl.dat",
   };
 
   log::info("assets_path: ({})", args.assets_path);
