@@ -94,7 +94,8 @@ const struct aylin_shell_listener Window::k_window_listener = {
 
           if (window->first_frame) {
             window->m_egl_target = create_egl_target(shell, window->m_width, window->m_height);
-            window->m_egl_surface = window->m_egl_target->create_onscreen_surface();
+            window->m_primary_surface = window->m_egl_target->create_onscreen_surface();
+            window->m_resource_surface = window->m_egl_target->create_offscreen_surface();
 
             window->first_frame = false;
           }

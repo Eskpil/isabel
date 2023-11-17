@@ -40,7 +40,9 @@ private:
   FlutterEngine m_engine;
 
   std::unique_ptr<surface::EglTarget> m_egl_target;
-  std::unique_ptr<surface::EglSurface> m_egl_surface;
+
+  std::unique_ptr<surface::EglSurface> m_primary_surface;
+  std::unique_ptr<surface::EglSurface> m_resource_surface;
 
   // TODO: Separate out into some kind of cache/struct.
   FlutterPointerPhase m_last_pointer_phase;

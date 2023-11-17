@@ -11,19 +11,26 @@ Target::Target() {
 
   config.type = kOpenGL;
   config.open_gl.struct_size = sizeof(config.open_gl);
+
+  config.open_gl.make_resource_current = [](void *data) -> bool {
+    auto target = reinterpret_cast<Target *>(data);
+    target->m_resource_surface->make_current();
+    return true;
+  };
+
   config.open_gl.make_current = [](void* data) -> bool {
     auto target = reinterpret_cast<Target *>(data);
-    target->m_egl_surface->make_current();
+    target->m_primary_surface->make_current();
     return true;
   };
   config.open_gl.clear_current = [](void* data) -> bool {
     auto target = reinterpret_cast<Target *>(data);
-    target->m_egl_surface->clear_current();
+    target->m_primary_surface->clear_current();
     return true;
   };
   config.open_gl.present = [](void* data) -> bool {
     auto target = reinterpret_cast<Target *>(data);
-    target->m_egl_surface->swap_buffers();
+    target->m_primary_surface->swap_buffers();
     return true;
   };
   config.open_gl.fbo_callback = [](void*) -> uint32_t {
@@ -31,7 +38,7 @@ Target::Target() {
   };
   config.open_gl.gl_proc_resolver = [](void* data, const char* name) -> void* {
     auto target = reinterpret_cast<Target *>(data);
-    return target->m_egl_surface->get_proc_address(name);
+    return target->m_primary_surface->get_proc_address(name);
   };
 
   FlutterProjectArgs args = {

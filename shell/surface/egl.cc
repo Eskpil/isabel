@@ -78,8 +78,6 @@ void EglSurface::swap_buffers() {
 }
 
 std::unique_ptr<EglSurface> EglTarget::create_onscreen_surface() {
-  log::dbg("display: ({}) config: ({}) onscreen_window: ({})", m_display, m_config, m_onscreen_window);
-
   const EGLint attribs[] = {EGL_NONE};
   EGLSurface surface = eglCreateWindowSurface(m_display, m_config,
                                               m_onscreen_window, attribs);
@@ -87,12 +85,18 @@ std::unique_ptr<EglSurface> EglTarget::create_onscreen_surface() {
     log::fatal("could not create egl_surface: ({})", get_egl_error_cause());
   }
 
-  log::info("create onscreen surface display: ({})", m_display);
   return std::make_unique<EglSurface>(surface, m_display, m_context);
 }
 
 std::unique_ptr<EglSurface> EglTarget::create_offscreen_surface() {
-  return nullptr;
+  const EGLint attribs[] = {EGL_NONE};
+  EGLSurface surface = eglCreateWindowSurface(
+      m_display, m_config, m_offscreen_window, attribs);
+  if (surface == EGL_NO_SURFACE) {
+    log::fatal("could not create egl_surface: ({})", get_egl_error_cause());
+  }
+
+  return std::make_unique<EglSurface>(surface, m_display, m_resource_context);
 }
 
 void EglTarget::resize_onscreen_window(int width, int height) const {
