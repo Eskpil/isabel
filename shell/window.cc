@@ -47,12 +47,50 @@ const struct aylin_shell_listener Window::k_window_listener = {
       // TODO: Figure out what to do with pixel ratio.
       window->update_window_metrics(event->width, event->height, 1);
     },
+    .pointer_enter = [](struct aylin_shell *shell, struct aylin_shell_pointer_enter_event *event, void *userdata) {
+      auto window = reinterpret_cast<Window *>(userdata);
+      window->handle_pointer_enter(event->x, event->y);
+    },
+    .pointer_leave = [](struct aylin_shell *shell, struct aylin_shell_pointer_leave_event *event, void *userdata) {
+      auto window = reinterpret_cast<Window *>(userdata);
+      window->handle_pointer_leave();
+    },
+    .pointer_button = [](struct aylin_shell *shell, struct aylin_shell_pointer_button_event *event, void *userdata) {
+      auto window = reinterpret_cast<Window *>(userdata);
+
+      auto button = FlutterPointerMouseButtons::kFlutterPointerButtonMousePrimary;
+      switch (event->button) {
+      case left:
+        break;
+      case right:
+        button = FlutterPointerMouseButtons::kFlutterPointerButtonMouseSecondary;
+        break;
+      case middle:
+        button = FlutterPointerMouseButtons::kFlutterPointerButtonMouseMiddle;
+        break;
+      case back:
+        button = FlutterPointerMouseButtons::kFlutterPointerButtonMouseBack;
+        break;
+      default:
+        return;
+      }
+
+      window->handle_pointer_button(event->x, event->y, event->action == press, button, static_cast<size_t>(event->timestamp));
+    },
+    .pointer_motion = [](struct aylin_shell *shell, struct aylin_shell_pointer_motion_event *event, void *userdata) {
+      auto window = reinterpret_cast<Window *>(userdata);
+      window->handle_pointer_motion(event->x, event->y, static_cast<size_t>(event->timestamp));
+    },
+    .key_pressed = [](struct aylin_shell *shell, struct aylin_shell_key_pressed_event *event, void *userdata) {
+        auto window = reinterpret_cast<Window *>(userdata);
+        window->handle_key_pressed(event->keycode, event->action == press, event->serial, static_cast<size_t>(event->timestamp));
+    },
     .frame =
         [](struct aylin_shell *shell, struct aylin_shell_frame_event *event,
            void *userdata) {
           auto window = reinterpret_cast<Window *>(userdata);
 
-          log::info("received frame event");
+          // log::info("received frame event");
 
           if (window->first_frame) {
             window->m_egl_target = create_egl_target(shell, window->m_width, window->m_height);

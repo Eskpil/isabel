@@ -997,7 +997,7 @@ typedef struct {
   /// The timestamp at which the key event was generated. The timestamp should
   /// be specified in microseconds and the clock should be the same as that used
   /// by `FlutterEngineGetCurrentTime`.
-  double timestamp;
+  size_t timestamp;
   /// The event kind.
   FlutterKeyEventType type;
   /// The USB HID code for the physical key of the event.
