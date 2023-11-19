@@ -81,13 +81,6 @@ Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
       .platform_message_callback =
           [](const FlutterPlatformMessage *message, void *data) {
             auto target = reinterpret_cast<Target *>(data);
-
-            // log::info("got platform message callback {}\n\n{}\n",
-            //           message->channel,
-            //           std::string_view(
-            //               reinterpret_cast<const char *>(message->message),
-            //               message->message_size));
-
             target->m_dispatcher->dispatch(message);
           },
 
@@ -228,8 +221,6 @@ void Target::update_window_metrics(int width, int height, int pixel_ratio) {
   event.width = width;
   event.height = height;
   event.pixel_ratio = pixel_ratio;
-
-  log::dbg("sending new window metrics ({}x{})", width, height);
 
   FlutterEngineSendWindowMetricsEvent(m_engine, &event);
 }

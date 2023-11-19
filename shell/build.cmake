@@ -14,6 +14,7 @@ set(SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/shell/dispatcher.cc"
 
         "${CMAKE_CURRENT_SOURCE_DIR}/shell/plugins/text_input/text_input.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/plugins/text_input/model.cc"
 )
 
 set(LIBISABEL "isabel")
