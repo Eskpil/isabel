@@ -3,6 +3,8 @@
 #include "shell/log.h"
 #include "shell/target.h"
 
+#include "shell/plugins/text_input/text_input.h"
+
 namespace shell {
 
 Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
@@ -15,6 +17,9 @@ Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
 
         FlutterEngineRunTask(m_engine, task);
       });
+
+  m_dispatcher = std::make_shared<Dispatcher>();
+  m_plugins = std::make_unique<PluginManager>();
 
   config.type = kOpenGL;
   config.open_gl.struct_size = sizeof(config.open_gl);
@@ -75,20 +80,31 @@ Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
 
       .platform_message_callback =
           [](const FlutterPlatformMessage *message, void *data) {
-            log::info("got platform message callback {}", message->channel);
+            auto target = reinterpret_cast<Target *>(data);
+
+            // log::info("got platform message callback {}\n\n{}\n",
+            //           message->channel,
+            //           std::string_view(
+            //               reinterpret_cast<const char *>(message->message),
+            //               message->message_size));
+
+            target->m_dispatcher->dispatch(message);
           },
 
       .custom_task_runners = &custom_task_runners,
   };
-
-  log::info("assets_path: ({})", args.assets_path);
-  log::info("icu_data_path: ({})", args.icu_data_path);
 
   FlutterEngineResult result = FlutterEngineInitialize(
       FLUTTER_ENGINE_VERSION, &config, &args, this, &m_engine);
   if (result != kSuccess || m_engine == nullptr) {
     log::fatal("could not initialize the flutter engine");
   }
+
+  create_platform_listeners();
+}
+
+void Target::create_platform_listeners() {
+  m_plugins->create<plugins::TextInput>(m_dispatcher);
 }
 
 void Target::run() {
@@ -107,14 +123,8 @@ void Target::handle_key_pressed(uint32_t keycode, bool pressed, uint32_t serial,
   if (!m_engine_is_running)
     return;
 
-  FlutterKeyEvent event = {
-      .struct_size = sizeof(FlutterKeyEvent),
-      .timestamp = timestamp,
-      .type = pressed ? kFlutterKeyEventTypeDown : kFlutterKeyEventTypeUp,
-      .logical = keycode,
-  };
-
-  FlutterEngineSendKeyEvent(m_engine, &event, nullptr, nullptr);
+  auto text_input = m_plugins->get<plugins::TextInput>("text_input");
+  text_input->handle_key_event(keycode, pressed);
 }
 
 void Target::handle_pointer_motion(double x, double y, size_t timestamp) {

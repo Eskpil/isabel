@@ -6,11 +6,14 @@ pkg_check_modules(EGL REQUIRED egl)
 pkg_check_modules(GL REQUIRED gl)
 
 set(SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/shell/application.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/shell/window.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/shell/surface/egl.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/shell/target.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/shell/task_runner.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/application.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/window.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/surface/egl.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/target.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/task_runner.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/dispatcher.cc"
+
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/plugins/text_input/text_input.cc"
 )
 
 set(LIBISABEL "isabel")
