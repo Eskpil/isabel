@@ -30,6 +30,7 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  final _formKey = GlobalKey<FormState>();
 
   void _incrementCounter() {
     setState(() {
@@ -52,6 +53,29 @@ class _MyHomePageState extends State<MyHomePage> {
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+
+          Form(
+            key: _formKey,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: <Widget>[
+                  TextFormField(
+                    // The validator receives the text that the user has entered.
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter some text';
+                      }
+                      return null;
+                    },
+                    onFieldSubmitted: (value) {
+                      print("submitted: $value");
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
           ],
         ),
       ),

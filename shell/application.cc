@@ -1,5 +1,5 @@
-#include <cstring>
 #include <cerrno>
+#include <cstring>
 
 #include "shell/application.h"
 #include "shell/log.h"
@@ -7,24 +7,32 @@
 namespace shell {
 
 const struct aylin_application_listener Application::k_application_listener = {
-    .output = [](struct aylin_application *aylin_app, struct aylin_output *output, void *userdata) {
-      log::info("received output: {} ({}@{})", output->name, output->width, output->height);
+    .output =
+        [](struct aylin_application *aylin_app, struct aylin_output *output,
+           void *userdata) {
+          log::info("received output: {} ({}@{})", output->name, output->width,
+                    output->height);
+        },
+    .process =
+        [](struct aylin_application *aylin_app, void *data) {
+          auto app = reinterpret_cast<Application *>(data);
 
-    },
+          for (auto &target : app->m_targets) {
+            target->perform_tasks();
+          }
+        },
 };
 
 Application::Application() {
   // TODO: Allow user to tell us app-id.
-  m_application = aylin_application_create("", &Application::k_application_listener, this);
+  m_application =
+      aylin_application_create("", &Application::k_application_listener, this);
   if (m_application == nullptr) {
     log::fatal("could not create aylin application: {}", strerror(errno));
   }
-
 }
 
-Application::~Application() {
-  aylin_application_destroy(m_application);
-}
+Application::~Application() { aylin_application_destroy(m_application); }
 
 void Application::attach(shell::Target *target) {
   // Target never outlives application anyway. And why would target try to
@@ -41,4 +49,4 @@ int Application::exec() {
   return aylin_application_poll(m_application);
 }
 
-}
+} // namespace shell

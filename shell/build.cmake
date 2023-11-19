@@ -10,6 +10,7 @@ set(SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/shell/window.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/shell/surface/egl.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/shell/target.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/shell/task_runner.cc"
 )
 
 set(LIBISABEL "isabel")

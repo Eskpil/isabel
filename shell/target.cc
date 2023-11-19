@@ -1,13 +1,20 @@
 #include <chrono>
 
-#include "shell/target.h"
 #include "shell/log.h"
+#include "shell/target.h"
 
 namespace shell {
 
 Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
-  log::info("creating base target");
   FlutterRendererConfig config = {};
+
+  m_task_runner = std::make_unique<TaskRunner>(
+      FlutterEngineGetCurrentTime, [this](const auto *task) {
+        if (!m_engine_is_running)
+          return;
+
+        FlutterEngineRunTask(m_engine, task);
+      });
 
   config.type = kOpenGL;
   config.open_gl.struct_size = sizeof(config.open_gl);
@@ -18,39 +25,67 @@ Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
     return true;
   };
 
-  config.open_gl.make_current = [](void* data) -> bool {
+  config.open_gl.make_current = [](void *data) -> bool {
     auto target = reinterpret_cast<Target *>(data);
     target->m_primary_surface->make_current();
     return true;
   };
-  config.open_gl.clear_current = [](void* data) -> bool {
+  config.open_gl.clear_current = [](void *data) -> bool {
     auto target = reinterpret_cast<Target *>(data);
     target->m_primary_surface->clear_current();
     return true;
   };
-  config.open_gl.present = [](void* data) -> bool {
+  config.open_gl.present = [](void *data) -> bool {
     auto target = reinterpret_cast<Target *>(data);
     target->m_primary_surface->swap_buffers();
     return true;
   };
-  config.open_gl.fbo_callback = [](void*) -> uint32_t {
-    return 0;  // FBO0
+  config.open_gl.fbo_callback = [](void *) -> uint32_t {
+    return 0; // FBO0
   };
-  config.open_gl.gl_proc_resolver = [](void* data, const char* name) -> void* {
+  config.open_gl.gl_proc_resolver = [](void *data, const char *name) -> void * {
     auto target = reinterpret_cast<Target *>(data);
     return target->m_primary_surface->get_proc_address(name);
   };
+
+  // Configure task runners.
+  FlutterTaskRunnerDescription platform_task_runner = {};
+  platform_task_runner.struct_size = sizeof(FlutterTaskRunnerDescription);
+  platform_task_runner.user_data = m_task_runner.get();
+  platform_task_runner.runs_task_on_current_thread_callback =
+      [](void *data) -> bool {
+    auto task_runner = reinterpret_cast<TaskRunner *>(data);
+    return task_runner->runs_tasks_on_current_thread();
+  };
+
+  platform_task_runner.post_task_callback =
+      [](FlutterTask task, uint64_t target_time_nanos, void *data) -> void {
+    auto task_runner = reinterpret_cast<TaskRunner *>(data);
+    task_runner->post_delayed_task(task, target_time_nanos);
+  };
+
+  FlutterCustomTaskRunners custom_task_runners = {};
+  custom_task_runners.struct_size = sizeof(FlutterCustomTaskRunners);
+  custom_task_runners.platform_task_runner = &platform_task_runner;
 
   FlutterProjectArgs args = {
       .struct_size = sizeof(FlutterProjectArgs),
       .assets_path = flutter_assets.data(),
       .icu_data_path = icudtl_dat.data(),
+
+      .platform_message_callback =
+          [](const FlutterPlatformMessage *message, void *data) {
+            log::info("got platform message callback {}", message->channel);
+          },
+
+      .custom_task_runners = &custom_task_runners,
   };
 
   log::info("assets_path: ({})", args.assets_path);
   log::info("icu_data_path: ({})", args.icu_data_path);
 
-  FlutterEngineResult result = FlutterEngineInitialize(FLUTTER_ENGINE_VERSION, &config, &args, this, &m_engine);
+  FlutterEngineResult result = FlutterEngineInitialize(
+      FLUTTER_ENGINE_VERSION, &config, &args, this, &m_engine);
   if (result != kSuccess || m_engine == nullptr) {
     log::fatal("could not initialize the flutter engine");
   }
@@ -67,7 +102,8 @@ void Target::run() {
 }
 
 // TODO: IMPORTANT handle serial.
-void Target::handle_key_pressed(uint32_t keycode, bool pressed, uint32_t serial, size_t timestamp) {
+void Target::handle_key_pressed(uint32_t keycode, bool pressed, uint32_t serial,
+                                size_t timestamp) {
   if (!m_engine_is_running)
     return;
 
@@ -85,9 +121,10 @@ void Target::handle_pointer_motion(double x, double y, size_t timestamp) {
   if (!m_engine_is_running)
     return;
 
-  // NOTE: the hover event can not be sent if the flutter pointer is pressed. When a
-  //       pointer button is pressed under a motion event flutter expects the phase
-  //       to be set as move.
+  // NOTE: the hover event can not be sent if the flutter pointer is pressed.
+  // When a
+  //       pointer button is pressed under a motion event flutter expects the
+  //       phase to be set as move.
   auto phase = FlutterPointerPhase::kHover;
   if (m_last_pointer_phase == FlutterPointerPhase::kDown) {
     phase = FlutterPointerPhase::kMove;
@@ -110,7 +147,10 @@ void Target::handle_pointer_enter(double x, double y) {
   if (!m_engine_is_running)
     return;
 
-  auto timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+  auto timestamp =
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::high_resolution_clock::now().time_since_epoch())
+          .count();
 
   FlutterPointerEvent event = {
       .struct_size = sizeof(FlutterPointerEvent),
@@ -129,7 +169,10 @@ void Target::handle_pointer_leave() {
   if (!m_engine_is_running)
     return;
 
-  auto timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+  auto timestamp =
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::high_resolution_clock::now().time_since_epoch())
+          .count();
 
   FlutterPointerEvent event = {
       .struct_size = sizeof(FlutterPointerEvent),
@@ -142,7 +185,9 @@ void Target::handle_pointer_leave() {
   FlutterEngineSendPointerEvent(m_engine, &event, 1);
 }
 
-void Target::handle_pointer_button(double x, double y, bool pressed, FlutterPointerMouseButtons button, size_t timestamp) {
+void Target::handle_pointer_button(double x, double y, bool pressed,
+                                   FlutterPointerMouseButtons button,
+                                   size_t timestamp) {
   if (!m_engine_is_running)
     return;
 
@@ -176,9 +221,9 @@ void Target::update_window_metrics(int width, int height, int pixel_ratio) {
 
   log::dbg("sending new window metrics ({}x{})", width, height);
 
-  FlutterEngineSendWindowMetricsEvent(
-      m_engine,
-      &event);
+  FlutterEngineSendWindowMetricsEvent(m_engine, &event);
 }
 
-}
+void Target::perform_tasks() { m_task_runner->process(); }
+
+} // namespace shell

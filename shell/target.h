@@ -5,6 +5,7 @@
 
 #include "shell/surface/egl.h"
 #include "shell/flutter/embedder.h"
+#include "shell/task_runner.h"
 
 namespace shell {
 
@@ -25,6 +26,8 @@ class Target {
   void run();
 private:
   virtual void configure(Application *) = 0;
+
+  void perform_tasks();
 
   void update_window_metrics(int, int, int);
 
@@ -47,6 +50,8 @@ private:
   // TODO: Separate out into some kind of cache/struct.
   FlutterPointerPhase m_last_pointer_phase;
   FlutterPointerMouseButtons m_last_pointer_button;
+
+  std::unique_ptr<TaskRunner> m_task_runner;
 
   Buffer m_buffer;
   bool m_buffer_full { false };
