@@ -4,6 +4,7 @@ pkg_check_modules(AYLIN REQUIRED aylin)
 pkg_check_modules(WAYLAND_EGL REQUIRED wayland-egl)
 pkg_check_modules(EGL REQUIRED egl)
 pkg_check_modules(GL REQUIRED gl)
+pkg_check_modules(JSONC REQUIRED json-c)
 
 set(SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/shell/application.cc"
@@ -31,6 +32,7 @@ target_include_directories(
         ${AYLIN_INCLUDE_DIRS}
         ${WAYLAND_EGL_SOURCE_DIRS}
         ${EGL_INCLUDE_DIRS}
+        ${JSONC_INCLUDE_DIRS}
 )
 
 set(FLUTTER_EMBEDDER_LIBRARIES "${CMAKE_CURRENT_SOURCE_DIR}/build/libflutter_engine.so")
@@ -42,4 +44,5 @@ target_link_libraries(
         ${FLUTTER_EMBEDDER_LIBRARIES}
         ${EGL_LIBRARIES}
         ${GL_LIBRARIES}
+        ${JSONC_LIBRARIES}
 )

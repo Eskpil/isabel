@@ -18,7 +18,12 @@ Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
         FlutterEngineRunTask(m_engine, task);
       });
 
-  m_dispatcher = std::make_shared<Dispatcher>();
+  m_dispatcher = std::make_shared<Dispatcher>(
+      [this](const FlutterPlatformMessage *message) {
+        if (FlutterEngineSendPlatformMessage(m_engine, message) != kSuccess) {
+          log::error("could not send platform message");
+        }
+      });
   m_plugins = std::make_unique<PluginManager>();
 
   config.type = kOpenGL;
@@ -111,23 +116,25 @@ void Target::run() {
 }
 
 // TODO: IMPORTANT handle serial.
-void Target::handle_key_pressed(uint32_t keycode, bool pressed, uint32_t serial,
-                                size_t timestamp) {
+void Target::handle_key_pressed(uint32_t keycode, uint32_t symbol, bool pressed,
+                                uint32_t serial, size_t timestamp) {
   if (!m_engine_is_running)
     return;
 
+  if (!pressed)
+    return;
+
   auto text_input = m_plugins->get<plugins::TextInput>("text_input");
-  text_input->handle_key_event(keycode, pressed);
+  text_input->handle_key_event(keycode, symbol, pressed);
 }
 
 void Target::handle_pointer_motion(double x, double y, size_t timestamp) {
   if (!m_engine_is_running)
     return;
 
-  // NOTE: the hover event can not be sent if the flutter pointer is pressed.
-  // When a
-  //       pointer button is pressed under a motion event flutter expects the
-  //       phase to be set as move.
+  // NOTE: The hover event can not be sent if the flutter pointer is pressed.
+  //       When a pointer button is pressed under a motion event flutter expects
+  //       the phase to be set as move.
   auto phase = FlutterPointerPhase::kHover;
   if (m_last_pointer_phase == FlutterPointerPhase::kDown) {
     phase = FlutterPointerPhase::kMove;

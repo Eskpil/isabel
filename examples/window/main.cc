@@ -1,6 +1,7 @@
 #include <memory>
 
 #include "shell/application.h"
+#include "shell/log.h"
 #include "shell/window.h"
 
 int main() {

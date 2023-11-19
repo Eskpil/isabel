@@ -55,13 +55,13 @@ extern "C" {
 
 #ifndef FLUTTER_EXPORT
 #define FLUTTER_EXPORT
-#endif  // FLUTTER_EXPORT
+#endif // FLUTTER_EXPORT
 
 #ifdef FLUTTER_API_SYMBOL_PREFIX
 #define FLUTTER_EMBEDDING_CONCAT(a, b) a##b
-#define FLUTTER_EMBEDDING_ADD_PREFIX(symbol, prefix) \
+#define FLUTTER_EMBEDDING_ADD_PREFIX(symbol, prefix)                           \
   FLUTTER_EMBEDDING_CONCAT(prefix, symbol)
-#define FLUTTER_API_SYMBOL(symbol) \
+#define FLUTTER_API_SYMBOL(symbol)                                             \
   FLUTTER_EMBEDDING_ADD_PREFIX(symbol, FLUTTER_API_SYMBOL_PREFIX)
 #else
 #define FLUTTER_API_SYMBOL(symbol) symbol
@@ -264,7 +264,7 @@ typedef enum {
   kRaster = 3,
 } FlutterThreadPriority;
 
-typedef struct _FlutterEngine* FLUTTER_API_SYMBOL(FlutterEngine);
+typedef struct _FlutterEngine *FLUTTER_API_SYMBOL(FlutterEngine);
 
 typedef struct {
   /// horizontal scale factor
@@ -287,7 +287,7 @@ typedef struct {
   double pers2;
 } FlutterTransformation;
 
-typedef void (*VoidCallback)(void* /* user data */);
+typedef void (*VoidCallback)(void * /* user data */);
 
 typedef enum {
   /// Specifies an OpenGL texture target type. Textures are specified using
@@ -364,7 +364,7 @@ typedef struct {
   /// The texture format (example GL_RGBA8).
   uint32_t format;
   /// User data to be returned on the invocation of the destruction callback.
-  void* user_data;
+  void *user_data;
   /// Callback invoked (on an engine managed thread) that asks the embedder to
   /// collect the texture.
   VoidCallback destruction_callback;
@@ -388,28 +388,27 @@ typedef struct {
   uint32_t name;
 
   /// User data to be returned on the invocation of the destruction callback.
-  void* user_data;
+  void *user_data;
 
   /// Callback invoked (on an engine managed thread) that asks the embedder to
   /// collect the framebuffer.
   VoidCallback destruction_callback;
 } FlutterOpenGLFramebuffer;
 
-typedef bool (*BoolCallback)(void* /* user data */);
-typedef FlutterTransformation (*TransformationCallback)(void* /* user data */);
-typedef uint32_t (*UIntCallback)(void* /* user data */);
-typedef bool (*SoftwareSurfacePresentCallback)(void* /* user data */,
-                                               const void* /* allocation */,
+typedef bool (*BoolCallback)(void * /* user data */);
+typedef FlutterTransformation (*TransformationCallback)(void * /* user data */);
+typedef uint32_t (*UIntCallback)(void * /* user data */);
+typedef bool (*SoftwareSurfacePresentCallback)(void * /* user data */,
+                                               const void * /* allocation */,
                                                size_t /* row bytes */,
                                                size_t /* height */);
-typedef void* (*ProcResolver)(void* /* user data */, const char* /* name */);
-typedef bool (*TextureFrameCallback)(void* /* user data */,
+typedef void *(*ProcResolver)(void * /* user data */, const char * /* name */);
+typedef bool (*TextureFrameCallback)(void * /* user data */,
                                      int64_t /* texture identifier */,
-                                     size_t /* width */,
-                                     size_t /* height */,
-                                     FlutterOpenGLTexture* /* texture out */);
-typedef void (*VsyncCallback)(void* /* user data */, intptr_t /* baton */);
-typedef void (*OnPreEngineRestartCallback)(void* /* user data */);
+                                     size_t /* width */, size_t /* height */,
+                                     FlutterOpenGLTexture * /* texture out */);
+typedef void (*VsyncCallback)(void * /* user data */, intptr_t /* baton */);
+typedef void (*OnPreEngineRestartCallback)(void * /* user data */);
 
 /// A structure to represent the width and height.
 typedef struct {
@@ -455,7 +454,7 @@ typedef struct {
   /// The number of rectangles within the damage region.
   size_t num_rects;
   /// The actual damage region(s) in question.
-  FlutterRect* damage;
+  FlutterRect *damage;
 } FlutterDamage;
 
 /// This information is passed to the embedder when requesting a frame buffer
@@ -473,15 +472,13 @@ typedef struct {
 
 /// Callback for when a frame buffer object is requested.
 typedef uint32_t (*UIntFrameInfoCallback)(
-    void* /* user data */,
-    const FlutterFrameInfo* /* frame info */);
+    void * /* user data */, const FlutterFrameInfo * /* frame info */);
 
 /// Callback for when a frame buffer object is requested with necessary
 /// information for partial repaint.
 typedef void (*FlutterFrameBufferWithDamageCallback)(
-    void* /* user data */,
-    const intptr_t /* fbo id */,
-    FlutterDamage* /* existing damage */);
+    void * /* user data */, const intptr_t /* fbo id */,
+    FlutterDamage * /* existing damage */);
 
 /// This information is passed to the embedder when a surface is presented.
 ///
@@ -499,8 +496,7 @@ typedef struct {
 
 /// Callback for when a surface is presented.
 typedef bool (*BoolPresentInfoCallback)(
-    void* /* user data */,
-    const FlutterPresentInfo* /* present info */);
+    void * /* user data */, const FlutterPresentInfo * /* present info */);
 
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterOpenGLRendererConfig).
@@ -585,13 +581,13 @@ typedef struct {
 } FlutterOpenGLRendererConfig;
 
 /// Alias for id<MTLDevice>.
-typedef const void* FlutterMetalDeviceHandle;
+typedef const void *FlutterMetalDeviceHandle;
 
 /// Alias for id<MTLCommandQueue>.
-typedef const void* FlutterMetalCommandQueueHandle;
+typedef const void *FlutterMetalCommandQueueHandle;
 
 /// Alias for id<MTLTexture>.
-typedef const void* FlutterMetalTextureHandle;
+typedef const void *FlutterMetalTextureHandle;
 
 /// Pixel format for the external texture.
 typedef enum {
@@ -624,7 +620,7 @@ typedef struct {
   /// textures have been unregistered via the
   /// `FlutterEngineUnregisterExternalTexture`, the embedder has to release
   /// these textures.
-  FlutterMetalTextureHandle* textures;
+  FlutterMetalTextureHandle *textures;
   /// The YUV color space of the YUV external texture.
   FlutterMetalExternalTextureYUVColorSpace yuv_color_space;
 } FlutterMetalExternalTexture;
@@ -632,11 +628,9 @@ typedef struct {
 /// Callback to provide an external texture for a given texture_id.
 /// See: external_texture_frame_callback.
 typedef bool (*FlutterMetalTextureFrameCallback)(
-    void* /* user data */,
-    int64_t /* texture identifier */,
-    size_t /* width */,
-    size_t /* height */,
-    FlutterMetalExternalTexture* /* texture out */);
+    void * /* user data */, int64_t /* texture identifier */,
+    size_t /* width */, size_t /* height */,
+    FlutterMetalExternalTexture * /* texture out */);
 
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterMetalTexture).
@@ -654,7 +648,7 @@ typedef struct {
   /// A baton that is not interpreted by the engine in any way. It will be given
   /// back to the embedder in the destruction callback below. Embedder resources
   /// may be associated with this baton.
-  void* user_data;
+  void *user_data;
   /// The callback invoked by the engine when it no longer needs this backing
   /// store.
   VoidCallback destruction_callback;
@@ -662,15 +656,13 @@ typedef struct {
 
 /// Callback for when a metal texture is requested.
 typedef FlutterMetalTexture (*FlutterMetalTextureCallback)(
-    void* /* user data */,
-    const FlutterFrameInfo* /* frame info */);
+    void * /* user data */, const FlutterFrameInfo * /* frame info */);
 
 /// Callback for when a metal texture is presented. The texture_id here
 /// corresponds to the texture_id provided by the embedder in the
 /// `FlutterMetalTextureCallback` callback.
 typedef bool (*FlutterMetalPresentCallback)(
-    void* /* user data */,
-    const FlutterMetalTexture* /* texture */);
+    void * /* user data */, const FlutterMetalTexture * /* texture */);
 
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterMetalRendererConfig).
@@ -697,16 +689,16 @@ typedef struct {
 } FlutterMetalRendererConfig;
 
 /// Alias for VkInstance.
-typedef void* FlutterVulkanInstanceHandle;
+typedef void *FlutterVulkanInstanceHandle;
 
 /// Alias for VkPhysicalDevice.
-typedef void* FlutterVulkanPhysicalDeviceHandle;
+typedef void *FlutterVulkanPhysicalDeviceHandle;
 
 /// Alias for VkDevice.
-typedef void* FlutterVulkanDeviceHandle;
+typedef void *FlutterVulkanDeviceHandle;
 
 /// Alias for VkQueue.
-typedef void* FlutterVulkanQueueHandle;
+typedef void *FlutterVulkanQueueHandle;
 
 /// Alias for VkImage.
 typedef uint64_t FlutterVulkanImageHandle;
@@ -723,21 +715,18 @@ typedef struct {
 
 /// Callback to fetch a Vulkan function pointer for a given instance. Normally,
 /// this should return the results of vkGetInstanceProcAddr.
-typedef void* (*FlutterVulkanInstanceProcAddressCallback)(
-    void* /* user data */,
-    FlutterVulkanInstanceHandle /* instance */,
-    const char* /* name */);
+typedef void *(*FlutterVulkanInstanceProcAddressCallback)(
+    void * /* user data */, FlutterVulkanInstanceHandle /* instance */,
+    const char * /* name */);
 
 /// Callback for when a VkImage is requested.
 typedef FlutterVulkanImage (*FlutterVulkanImageCallback)(
-    void* /* user data */,
-    const FlutterFrameInfo* /* frame info */);
+    void * /* user data */, const FlutterFrameInfo * /* frame info */);
 
 /// Callback for when a VkImage has been written to and is ready for use by the
 /// embedder.
 typedef bool (*FlutterVulkanPresentCallback)(
-    void* /* user data */,
-    const FlutterVulkanImage* /* image */);
+    void * /* user data */, const FlutterVulkanImage * /* image */);
 
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterVulkanRendererConfig).
@@ -772,7 +761,7 @@ typedef struct {
   /// specified.
   /// This field is optional; `nullptr` may be specified.
   /// This memory is only accessed during the call to FlutterEngineInitialize.
-  const char** enabled_instance_extensions;
+  const char **enabled_instance_extensions;
   /// The number of device extensions available for enumerating in the next
   /// field.
   size_t enabled_device_extension_count;
@@ -783,7 +772,7 @@ typedef struct {
   /// This field is optional; `nullptr` may be specified.
   /// This memory is only accessed during the call to FlutterEngineInitialize.
   /// For example: VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME
-  const char** enabled_device_extensions;
+  const char **enabled_device_extensions;
   /// The callback invoked when resolving Vulkan function pointers.
   /// At a bare minimum this should be used to swap out any calls that operate
   /// on vkQueue's for threadsafe variants that obtain locks for their duration.
@@ -1018,7 +1007,7 @@ typedef struct {
   uint64_t logical;
   /// Null-terminated character input from the event. Can be null. Ignored for
   /// up events.
-  const char* character;
+  const char *character;
   /// True if this event does not correspond to a native event.
   ///
   /// The embedder is likely to skip events and/or construct new events that do
@@ -1035,7 +1024,7 @@ typedef struct {
 } FlutterKeyEvent;
 
 typedef void (*FlutterKeyEventCallback)(bool /* handled */,
-                                        void* /* user_data */);
+                                        void * /* user_data */);
 
 struct _FlutterPlatformMessageResponseHandle;
 typedef struct _FlutterPlatformMessageResponseHandle
@@ -1044,8 +1033,8 @@ typedef struct _FlutterPlatformMessageResponseHandle
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterPlatformMessage).
   size_t struct_size;
-  const char* channel;
-  const uint8_t* message;
+  const char *channel;
+  const uint8_t *message;
   size_t message_size;
   /// The response handle on which to invoke
   /// `FlutterEngineSendPlatformMessageResponse` when the response is ready.
@@ -1053,16 +1042,14 @@ typedef struct {
   /// received by the embedder. Failure to call
   /// `FlutterEngineSendPlatformMessageResponse` will cause a memory leak. It is
   /// not safe to send multiple responses on a single response object.
-  const FlutterPlatformMessageResponseHandle* response_handle;
+  const FlutterPlatformMessageResponseHandle *response_handle;
 } FlutterPlatformMessage;
 
 typedef void (*FlutterPlatformMessageCallback)(
-    const FlutterPlatformMessage* /* message*/,
-    void* /* user data */);
+    const FlutterPlatformMessage * /* message*/, void * /* user data */);
 
-typedef void (*FlutterDataCallback)(const uint8_t* /* data */,
-                                    size_t /* size */,
-                                    void* /* user data */);
+typedef void (*FlutterDataCallback)(const uint8_t * /* data */,
+                                    size_t /* size */, void * /* user data */);
 
 /// The identifier of the platform view. This identifier is specified by the
 /// application when a platform view is added to the scene via the
@@ -1103,7 +1090,7 @@ typedef struct {
   /// The size of this struct. Must be sizeof(FlutterLocaleStringAttribute).
   size_t struct_size;
   // The locale of this attribute.
-  const char* locale;
+  const char *locale;
 } FlutterLocaleStringAttribute;
 
 // Indicates how the assistive technology should treat the string.
@@ -1120,9 +1107,9 @@ typedef struct {
   FlutterStringAttributeType type;
   union {
     // Indicates the string should be announced character by character.
-    const FlutterSpellOutStringAttribute* spell_out;
+    const FlutterSpellOutStringAttribute *spell_out;
     // Indicates the string should be announced using the specified locale.
-    const FlutterLocaleStringAttribute* locale;
+    const FlutterLocaleStringAttribute *locale;
   };
 } FlutterStringAttribute;
 
@@ -1167,17 +1154,17 @@ typedef struct {
   /// Describes how much space the semantics node takes up along the z-axis.
   double thickness;
   /// A textual description of the node.
-  const char* label;
+  const char *label;
   /// A brief description of the result of performing an action on the node.
-  const char* hint;
+  const char *hint;
   /// A textual description of the current value of the node.
-  const char* value;
+  const char *value;
   /// A value that `value` will have after a kFlutterSemanticsActionIncrease`
   /// action has been performed.
-  const char* increased_value;
+  const char *increased_value;
   /// A value that `value` will have after a kFlutterSemanticsActionDecrease`
   /// action has been performed.
-  const char* decreased_value;
+  const char *decreased_value;
   /// The reading direction for `label`, `value`, `hint`, `increasedValue`,
   /// `decreasedValue`, and `tooltip`.
   FlutterTextDirection text_direction;
@@ -1189,19 +1176,19 @@ typedef struct {
   /// The number of children this node has.
   size_t child_count;
   /// Array of child node IDs in traversal order. Has length `child_count`.
-  const int32_t* children_in_traversal_order;
+  const int32_t *children_in_traversal_order;
   /// Array of child node IDs in hit test order. Has length `child_count`.
-  const int32_t* children_in_hit_test_order;
+  const int32_t *children_in_hit_test_order;
   /// The number of custom accessibility action associated with this node.
   size_t custom_accessibility_actions_count;
   /// Array of `FlutterSemanticsCustomAction` IDs associated with this node.
   /// Has length `custom_accessibility_actions_count`.
-  const int32_t* custom_accessibility_actions;
+  const int32_t *custom_accessibility_actions;
   /// Identifier of the platform view associated with this semantics node, or
   /// -1 if none.
   FlutterPlatformViewIdentifier platform_view_id;
   /// A textual tooltip attached to the node.
-  const char* tooltip;
+  const char *tooltip;
 } FlutterSemanticsNode;
 
 /// A node in the Flutter semantics tree.
@@ -1242,17 +1229,17 @@ typedef struct {
   /// Describes how much space the semantics node takes up along the z-axis.
   double thickness;
   /// A textual description of the node.
-  const char* label;
+  const char *label;
   /// A brief description of the result of performing an action on the node.
-  const char* hint;
+  const char *hint;
   /// A textual description of the current value of the node.
-  const char* value;
+  const char *value;
   /// A value that `value` will have after a kFlutterSemanticsActionIncrease`
   /// action has been performed.
-  const char* increased_value;
+  const char *increased_value;
   /// A value that `value` will have after a kFlutterSemanticsActionDecrease`
   /// action has been performed.
-  const char* decreased_value;
+  const char *decreased_value;
   /// The reading direction for `label`, `value`, `hint`, `increasedValue`,
   /// `decreasedValue`, and `tooltip`.
   FlutterTextDirection text_direction;
@@ -1264,44 +1251,44 @@ typedef struct {
   /// The number of children this node has.
   size_t child_count;
   /// Array of child node IDs in traversal order. Has length `child_count`.
-  const int32_t* children_in_traversal_order;
+  const int32_t *children_in_traversal_order;
   /// Array of child node IDs in hit test order. Has length `child_count`.
-  const int32_t* children_in_hit_test_order;
+  const int32_t *children_in_hit_test_order;
   /// The number of custom accessibility action associated with this node.
   size_t custom_accessibility_actions_count;
   /// Array of `FlutterSemanticsCustomAction` IDs associated with this node.
   /// Has length `custom_accessibility_actions_count`.
-  const int32_t* custom_accessibility_actions;
+  const int32_t *custom_accessibility_actions;
   /// Identifier of the platform view associated with this semantics node, or
   /// -1 if none.
   FlutterPlatformViewIdentifier platform_view_id;
   /// A textual tooltip attached to the node.
-  const char* tooltip;
+  const char *tooltip;
   // The number of string attributes associated with the `label`.
   size_t label_attribute_count;
   // Array of string attributes associated with the `label`.
   // Has length `label_attribute_count`.
-  const FlutterStringAttribute** label_attributes;
+  const FlutterStringAttribute **label_attributes;
   // The number of string attributes associated with the `hint`.
   size_t hint_attribute_count;
   // Array of string attributes associated with the `hint`.
   // Has length `hint_attribute_count`.
-  const FlutterStringAttribute** hint_attributes;
+  const FlutterStringAttribute **hint_attributes;
   // The number of string attributes associated with the `value`.
   size_t value_attribute_count;
   // Array of string attributes associated with the `value`.
   // Has length `value_attribute_count`.
-  const FlutterStringAttribute** value_attributes;
+  const FlutterStringAttribute **value_attributes;
   // The number of string attributes associated with the `increased_value`.
   size_t increased_value_attribute_count;
   // Array of string attributes associated with the `increased_value`.
   // Has length `increased_value_attribute_count`.
-  const FlutterStringAttribute** increased_value_attributes;
+  const FlutterStringAttribute **increased_value_attributes;
   // The number of string attributes associated with the `decreased_value`.
   size_t decreased_value_attribute_count;
   // Array of string attributes associated with the `decreased_value`.
   // Has length `decreased_value_attribute_count`.
-  const FlutterStringAttribute** decreased_value_attributes;
+  const FlutterStringAttribute **decreased_value_attributes;
 } FlutterSemanticsNode2;
 
 /// `FlutterSemanticsCustomAction` ID used as a sentinel to signal the end of a
@@ -1333,9 +1320,9 @@ typedef struct {
   /// `FlutterSemanticsAction` to override.
   FlutterSemanticsAction override_action;
   /// The user-readable name of this custom semantics action.
-  const char* label;
+  const char *label;
   /// The hint description of this custom semantics action.
-  const char* hint;
+  const char *hint;
 } FlutterSemanticsCustomAction;
 
 /// A custom semantics action, or action override.
@@ -1359,9 +1346,9 @@ typedef struct {
   /// `FlutterSemanticsAction` to override.
   FlutterSemanticsAction override_action;
   /// The user-readable name of this custom semantics action.
-  const char* label;
+  const char *label;
   /// The hint description of this custom semantics action.
-  const char* hint;
+  const char *hint;
 } FlutterSemanticsCustomAction2;
 
 /// A batch of updates to semantics nodes and custom actions.
@@ -1375,11 +1362,11 @@ typedef struct {
   /// The number of semantics node updates.
   size_t nodes_count;
   // Array of semantics nodes. Has length `nodes_count`.
-  FlutterSemanticsNode* nodes;
+  FlutterSemanticsNode *nodes;
   /// The number of semantics custom action updates.
   size_t custom_actions_count;
   /// Array of semantics custom actions. Has length `custom_actions_count`.
-  FlutterSemanticsCustomAction* custom_actions;
+  FlutterSemanticsCustomAction *custom_actions;
 } FlutterSemanticsUpdate;
 
 /// A batch of updates to semantics nodes and custom actions.
@@ -1389,45 +1376,43 @@ typedef struct {
   /// The number of semantics node updates.
   size_t node_count;
   // Array of semantics node pointers. Has length `node_count`.
-  FlutterSemanticsNode2** nodes;
+  FlutterSemanticsNode2 **nodes;
   /// The number of semantics custom action updates.
   size_t custom_action_count;
   /// Array of semantics custom action pointers. Has length
   /// `custom_action_count`.
-  FlutterSemanticsCustomAction2** custom_actions;
+  FlutterSemanticsCustomAction2 **custom_actions;
 } FlutterSemanticsUpdate2;
 
 typedef void (*FlutterUpdateSemanticsNodeCallback)(
-    const FlutterSemanticsNode* /* semantics node */,
-    void* /* user data */);
+    const FlutterSemanticsNode * /* semantics node */, void * /* user data */);
 
 typedef void (*FlutterUpdateSemanticsCustomActionCallback)(
-    const FlutterSemanticsCustomAction* /* semantics custom action */,
-    void* /* user data */);
+    const FlutterSemanticsCustomAction * /* semantics custom action */,
+    void * /* user data */);
 
 typedef void (*FlutterUpdateSemanticsCallback)(
-    const FlutterSemanticsUpdate* /* semantics update */,
-    void* /* user data*/);
+    const FlutterSemanticsUpdate * /* semantics update */,
+    void * /* user data*/);
 
 typedef void (*FlutterUpdateSemanticsCallback2)(
-    const FlutterSemanticsUpdate2* /* semantics update */,
-    void* /* user data*/);
+    const FlutterSemanticsUpdate2 * /* semantics update */,
+    void * /* user data*/);
 
 /// An update to whether a message channel has a listener set or not.
 typedef struct {
   // The size of the struct. Must be sizeof(FlutterChannelUpdate).
   size_t struct_size;
   /// The name of the channel.
-  const char* channel;
+  const char *channel;
   /// True if a listener has been set, false if one has been cleared.
   bool listening;
 } FlutterChannelUpdate;
 
 typedef void (*FlutterChannelUpdateCallback)(
-    const FlutterChannelUpdate* /* channel update */,
-    void* /* user data */);
+    const FlutterChannelUpdate * /* channel update */, void * /* user data */);
 
-typedef struct _FlutterTaskRunner* FlutterTaskRunner;
+typedef struct _FlutterTaskRunner *FlutterTaskRunner;
 
 typedef struct {
   FlutterTaskRunner runner;
@@ -1435,9 +1420,8 @@ typedef struct {
 } FlutterTask;
 
 typedef void (*FlutterTaskRunnerPostTaskCallback)(
-    FlutterTask /* task */,
-    uint64_t /* target time nanos */,
-    void* /* user data */);
+    FlutterTask /* task */, uint64_t /* target time nanos */,
+    void * /* user data */);
 
 /// An interface used by the Flutter engine to execute tasks at the target time
 /// on a specified thread. There should be a 1-1 relationship between a thread
@@ -1446,7 +1430,7 @@ typedef void (*FlutterTaskRunnerPostTaskCallback)(
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterTaskRunnerDescription).
   size_t struct_size;
-  void* user_data;
+  void *user_data;
   /// May be called from any thread. Should return true if tasks posted on the
   /// calling thread will be run on that same thread.
   ///
@@ -1475,12 +1459,12 @@ typedef struct {
   /// call is made. The same task runner description can be specified for both
   /// the render and platform task runners. This makes the Flutter engine use
   /// the same thread for both task runners.
-  const FlutterTaskRunnerDescription* platform_task_runner;
+  const FlutterTaskRunnerDescription *platform_task_runner;
   /// Specify the task runner for the thread on which the render tasks will be
   /// run. The same task runner description can be specified for both the render
   /// and platform task runners. This makes the Flutter engine use the same
   /// thread for both task runners.
-  const FlutterTaskRunnerDescription* render_task_runner;
+  const FlutterTaskRunnerDescription *render_task_runner;
   /// Specify a callback that is used to set the thread priority for embedder
   /// task runners.
   void (*thread_priority_setter)(FlutterThreadPriority);
@@ -1502,7 +1486,7 @@ typedef struct {
 typedef struct {
   /// A pointer to the raw bytes of the allocation described by this software
   /// backing store.
-  const void* allocation;
+  const void *allocation;
   /// The number of bytes in a single row of the allocation.
   size_t row_bytes;
   /// The number of rows in the allocation.
@@ -1510,7 +1494,7 @@ typedef struct {
   /// A baton that is not interpreted by the engine in any way. It will be given
   /// back to the embedder in the destruction callback below. Embedder resources
   /// may be associated with this baton.
-  void* user_data;
+  void *user_data;
   /// The callback invoked by the engine when it no longer needs this backing
   /// store.
   VoidCallback destruction_callback;
@@ -1520,7 +1504,7 @@ typedef struct {
   size_t struct_size;
   /// A pointer to the raw bytes of the allocation described by this software
   /// backing store.
-  const void* allocation;
+  const void *allocation;
   /// The number of bytes in a single row of the allocation.
   size_t row_bytes;
   /// The number of rows in the allocation.
@@ -1528,7 +1512,7 @@ typedef struct {
   /// A baton that is not interpreted by the engine in any way. It will be given
   /// back to the embedder in the destruction callback below. Embedder resources
   /// may be associated with this baton.
-  void* user_data;
+  void *user_data;
   /// The callback invoked by the engine when it no longer needs this backing
   /// store.
   VoidCallback destruction_callback;
@@ -1557,11 +1541,11 @@ typedef struct {
   /// sync for all layers prior to calling the compositor present callback, and
   /// so the written layer images can be freely bound by the embedder without
   /// any additional synchronization.
-  const FlutterVulkanImage* image;
+  const FlutterVulkanImage *image;
   /// A baton that is not interpreted by the engine in any way. It will be given
   /// back to the embedder in the destruction callback below. Embedder resources
   /// may be associated with this baton.
-  void* user_data;
+  void *user_data;
   /// The callback invoked by the engine when it no longer needs this backing
   /// store.
   VoidCallback destruction_callback;
@@ -1615,7 +1599,7 @@ typedef struct {
   /// surface transformation. If these exist, the first mutation in the list
   /// will be a transformation mutation to make sure subsequent mutations are in
   /// the correct coordinate space.
-  const FlutterPlatformViewMutation** mutations;
+  const FlutterPlatformViewMutation **mutations;
 } FlutterPlatformView;
 
 typedef enum {
@@ -1639,7 +1623,7 @@ typedef struct {
   /// A baton that is not interpreted by the engine in any way. The embedder may
   /// use this to associate resources that are tied to the lifecycle of the
   /// `FlutterBackingStore`.
-  void* user_data;
+  void *user_data;
   /// Specifies the type of backing store.
   FlutterBackingStoreType type;
   /// Indicates if this backing store was updated since the last time it was
@@ -1681,7 +1665,7 @@ typedef struct {
   /// Number of rectangles in the region.
   size_t rects_count;
   /// The rectangles that make up the region.
-  FlutterRect* rects;
+  FlutterRect *rects;
 } FlutterRegion;
 
 /// Contains additional information about the backing store provided
@@ -1692,7 +1676,7 @@ typedef struct {
   /// The area of the backing store that contains Flutter contents. Pixels
   /// outside of this area are transparent and the embedder may choose not
   /// to render them. Coordinates are in physical pixels.
-  FlutterRegion* paint_region;
+  FlutterRegion *paint_region;
 } FlutterBackingStorePresentInfo;
 
 typedef struct {
@@ -1704,10 +1688,10 @@ typedef struct {
   union {
     /// Indicates that the contents of this layer are rendered by Flutter into a
     /// backing store.
-    const FlutterBackingStore* backing_store;
+    const FlutterBackingStore *backing_store;
     /// Indicates that the contents of this layer are determined by the
     /// embedder.
-    const FlutterPlatformView* platform_view;
+    const FlutterPlatformView *platform_view;
   };
   /// The offset of this layer (in physical pixels) relative to the top left of
   /// the root surface used by the engine.
@@ -1717,21 +1701,19 @@ typedef struct {
 
   /// Extra information for the backing store that the embedder may
   /// use during presentation.
-  FlutterBackingStorePresentInfo* backing_store_present_info;
+  FlutterBackingStorePresentInfo *backing_store_present_info;
 } FlutterLayer;
 
 typedef bool (*FlutterBackingStoreCreateCallback)(
-    const FlutterBackingStoreConfig* config,
-    FlutterBackingStore* backing_store_out,
-    void* user_data);
+    const FlutterBackingStoreConfig *config,
+    FlutterBackingStore *backing_store_out, void *user_data);
 
 typedef bool (*FlutterBackingStoreCollectCallback)(
-    const FlutterBackingStore* renderer,
-    void* user_data);
+    const FlutterBackingStore *renderer, void *user_data);
 
-typedef bool (*FlutterLayersPresentCallback)(const FlutterLayer** layers,
+typedef bool (*FlutterLayersPresentCallback)(const FlutterLayer **layers,
                                              size_t layers_count,
-                                             void* user_data);
+                                             void *user_data);
 
 typedef struct {
   /// This size of this struct. Must be sizeof(FlutterCompositor).
@@ -1740,7 +1722,7 @@ typedef struct {
   /// back to the embedder in `FlutterCompositor.create_backing_store_callback`,
   /// `FlutterCompositor.collect_backing_store_callback` and
   /// `FlutterCompositor.present_layers_callback`
-  void* user_data;
+  void *user_data;
   /// A callback invoked by the engine to obtain a backing store for a specific
   /// `FlutterLayer`.
   ///
@@ -1765,22 +1747,22 @@ typedef struct {
   /// The language code of the locale. For example, "en". This is a required
   /// field. The string must be null terminated. It may be collected after the
   /// call to `FlutterEngineUpdateLocales`.
-  const char* language_code;
+  const char *language_code;
   /// The country code of the locale. For example, "US". This is a an optional
   /// field. The string must be null terminated if present. It may be collected
   /// after the call to `FlutterEngineUpdateLocales`. If not present, a
   /// `nullptr` may be specified.
-  const char* country_code;
+  const char *country_code;
   /// The script code of the locale. This is a an optional field. The string
   /// must be null terminated if present. It may be collected after the call to
   /// `FlutterEngineUpdateLocales`. If not present, a `nullptr` may be
   /// specified.
-  const char* script_code;
+  const char *script_code;
   /// The variant code of the locale. This is a an optional field. The string
   /// must be null terminated if present. It may be collected after the call to
   /// `FlutterEngineUpdateLocales`. If not present, a `nullptr` may be
   /// specified.
-  const char* variant_code;
+  const char *variant_code;
 } FlutterLocale;
 
 /// Callback that returns the system locale.
@@ -1791,8 +1773,8 @@ typedef struct {
 ///
 /// This callback does not currently provide the user_data baton.
 /// https://github.com/flutter/flutter/issues/79826
-typedef const FlutterLocale* (*FlutterComputePlatformResolvedLocaleCallback)(
-    const FlutterLocale** /* supported_locales*/,
+typedef const FlutterLocale *(*FlutterComputePlatformResolvedLocaleCallback)(
+    const FlutterLocale ** /* supported_locales*/,
     size_t /* Number of locales*/);
 
 typedef struct {
@@ -1854,7 +1836,7 @@ typedef struct {
   /// An opaque baton passed back to the embedder when the
   /// buffer_collect_callback is invoked. The engine does not interpret this
   /// field in any way.
-  void* user_data;
+  void *user_data;
   /// This is an optional field.
   ///
   /// When specified, the engine will assume that the buffer is owned by the
@@ -1880,7 +1862,7 @@ typedef struct {
   /// modify that embedder owned buffer. For this reason, it is important that
   /// this buffer not have page protections that restrict writing to this
   /// buffer.
-  uint8_t* buffer;
+  uint8_t *buffer;
   /// The size of the buffer.
   size_t buffer_size;
 } FlutterEngineDartBuffer;
@@ -1902,8 +1884,8 @@ typedef struct {
     /// A null terminated string. This string will be copied by the VM in the
     /// call to `FlutterEnginePostDartObject` and must be collected by the
     /// embedder after that call is made.
-    const char* string_value;
-    const FlutterEngineDartBuffer* buffer_value;
+    const char *string_value;
+    const FlutterEngineDartBuffer *buffer_value;
   };
 } FlutterEngineDartObject;
 
@@ -1930,7 +1912,7 @@ typedef enum {
 /// A callback made by the engine in response to
 /// `FlutterEnginePostCallbackOnAllNativeThreads` on all internal thread.
 typedef void (*FlutterNativeThreadCallback)(FlutterNativeThreadType type,
-                                            void* user_data);
+                                            void *user_data);
 
 /// AOT data source type.
 typedef enum {
@@ -1943,7 +1925,7 @@ typedef struct {
   FlutterEngineAOTDataSourceType type;
   union {
     /// Absolute path to an ELF library file.
-    const char* elf_path;
+    const char *elf_path;
   };
 } FlutterEngineAOTDataSource;
 
@@ -1954,13 +1936,13 @@ typedef struct {
 // the app. The `message` parameter contains a null-terminated string
 // containing the message to be logged. `user_data` is a user data baton passed
 // in `FlutterEngineRun`.
-typedef void (*FlutterLogMessageCallback)(const char* /* tag */,
-                                          const char* /* message */,
-                                          void* /* user_data */);
+typedef void (*FlutterLogMessageCallback)(const char * /* tag */,
+                                          const char * /* message */,
+                                          void * /* user_data */);
 
 /// An opaque object that describes the AOT data that can be used to launch a
 /// FlutterEngine instance in AOT mode.
-typedef struct _FlutterEngineAOTData* FlutterEngineAOTData;
+typedef struct _FlutterEngineAOTData *FlutterEngineAOTData;
 
 typedef struct {
   /// The size of this struct. Must be sizeof(FlutterProjectArgs).
@@ -1968,7 +1950,7 @@ typedef struct {
   /// The path to the Flutter assets directory containing project assets. The
   /// string can be collected after the call to `FlutterEngineRun` returns. The
   /// string must be NULL terminated.
-  const char* assets_path;
+  const char *assets_path;
   /// The path to the Dart file containing the `main` entry point.
   /// The string can be collected after the call to `FlutterEngineRun` returns.
   /// The string must be NULL terminated.
@@ -1978,7 +1960,7 @@ typedef struct {
   ///                 and will be loaded by from `kernel_blob.bin` in the assets
   ///                 directory. This struct member is retained for ABI
   ///                 stability.
-  const char* main_path__unused__;
+  const char *main_path__unused__;
   /// The path to the `.packages` file for the project. The string can be
   /// collected after the call to `FlutterEngineRun` returns. The string must be
   /// NULL terminated.
@@ -1988,11 +1970,11 @@ typedef struct {
   ///                and will be loaded by from `kernel_blob.bin` in the assets
   ///                directory. This struct member is retained for ABI
   ///                stability.
-  const char* packages_path__unused__;
+  const char *packages_path__unused__;
   /// The path to the `icudtl.dat` file for the project. The string can be
   /// collected after the call to `FlutterEngineRun` returns. The string must
   /// be NULL terminated.
-  const char* icu_data_path;
+  const char *icu_data_path;
   /// The command line argument count used to initialize the project.
   int command_line_argc;
   /// The command line arguments used to initialize the project. The strings can
@@ -2010,7 +1992,7 @@ typedef struct {
   /// runtime in the presence of un-sanitized input. The list of currently
   /// recognized engine flags and their descriptions can be retrieved from the
   /// `switches.h` engine source file.
-  const char* const* command_line_argv;
+  const char *const *command_line_argv;
   /// The callback invoked by the engine in order to give the embedder the
   /// chance to respond to platform messages from the Dart application.
   /// The callback will be invoked on the thread on which the `FlutterEngineRun`
@@ -2021,7 +2003,7 @@ typedef struct {
   /// mapped in as read-only. For more information refer to the documentation on
   /// the Wiki at
   /// https://github.com/flutter/flutter/wiki/Flutter-engine-operation-in-AOT-Mode
-  const uint8_t* vm_snapshot_data;
+  const uint8_t *vm_snapshot_data;
   /// The size of the VM snapshot data buffer.  If vm_snapshot_data is a symbol
   /// reference, 0 may be passed here.
   size_t vm_snapshot_data_size;
@@ -2029,7 +2011,7 @@ typedef struct {
   /// must be mapped in as read-execute. For more information refer to the
   /// documentation on the Wiki at
   /// https://github.com/flutter/flutter/wiki/Flutter-engine-operation-in-AOT-Mode
-  const uint8_t* vm_snapshot_instructions;
+  const uint8_t *vm_snapshot_instructions;
   /// The size of the VM snapshot instructions buffer. If
   /// vm_snapshot_instructions is a symbol reference, 0 may be passed here.
   size_t vm_snapshot_instructions_size;
@@ -2037,7 +2019,7 @@ typedef struct {
   /// be mapped in as read-only. For more information refer to the documentation
   /// on the Wiki at
   /// https://github.com/flutter/flutter/wiki/Flutter-engine-operation-in-AOT-Mode
-  const uint8_t* isolate_snapshot_data;
+  const uint8_t *isolate_snapshot_data;
   /// The size of the isolate snapshot data buffer.  If isolate_snapshot_data is
   /// a symbol reference, 0 may be passed here.
   size_t isolate_snapshot_data_size;
@@ -2045,7 +2027,7 @@ typedef struct {
   /// buffer must be mapped in as read-execute. For more information refer to
   /// the documentation on the Wiki at
   /// https://github.com/flutter/flutter/wiki/Flutter-engine-operation-in-AOT-Mode
-  const uint8_t* isolate_snapshot_instructions;
+  const uint8_t *isolate_snapshot_instructions;
   /// The size of the isolate snapshot instructions buffer. If
   /// isolate_snapshot_instructions is a symbol reference, 0 may be passed here.
   size_t isolate_snapshot_instructions_size;
@@ -2090,7 +2072,7 @@ typedef struct {
   ///
   // This is different from the cache-path-dir argument defined in switches.h,
   // which is used in `flutter::Settings` as `temp_directory_path`.
-  const char* persistent_cache_path;
+  const char *persistent_cache_path;
 
   /// If true, the engine would only read the existing cache, but not write new
   /// ones.
@@ -2114,12 +2096,12 @@ typedef struct {
   /// Care must be taken to ensure that the custom entrypoint is not tree-shaken
   /// away. Usually, this is done using the `@pragma('vm:entry-point')`
   /// decoration.
-  const char* custom_dart_entrypoint;
+  const char *custom_dart_entrypoint;
 
   /// Typically the Flutter engine create and manages its internal threads. This
   /// optional argument allows for the specification of task runner interfaces
   /// to event loops managed by the embedder on threads it creates.
-  const FlutterCustomTaskRunners* custom_task_runners;
+  const FlutterCustomTaskRunners *custom_task_runners;
 
   /// All `FlutterEngine` instances in the process share the same Dart VM. When
   /// the first engine is launched, it starts the Dart VM as well. It used to be
@@ -2154,7 +2136,7 @@ typedef struct {
   /// be controlled using this field. This field is completely optional. In its
   /// absence, platforms views in the scene are ignored and Flutter renders to
   /// the root surface as normal.
-  const FlutterCompositor* compositor;
+  const FlutterCompositor *compositor;
 
   /// Max size of the old gen heap for the Dart VM in MB, or 0 for unlimited, -1
   /// for default value.
@@ -2192,7 +2174,7 @@ typedef struct {
   /// The strings will be copied out and so any strings passed in here can
   /// be safely collected after initializing the engine with
   /// `FlutterProjectArgs`.
-  const char* const* dart_entrypoint_argv;
+  const char *const *dart_entrypoint_argv;
 
   // Logging callback for Dart application messages.
   //
@@ -2207,7 +2189,7 @@ typedef struct {
   // A log message tag string that can be used convey application, subsystem,
   // or component name to embedder's logger. This string will be passed to to
   // callbacks on `log_message_callback`. Defaults to "flutter" if unspecified.
-  const char* log_tag;
+  const char *log_tag;
 
   // A callback that is invoked right before the engine is restarted.
   //
@@ -2265,9 +2247,9 @@ typedef struct {
 /// @return     Returns if the AOT data could be successfully resolved.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineCreateAOTData(
-    const FlutterEngineAOTDataSource* source,
-    FlutterEngineAOTData* data_out);
+FlutterEngineResult
+FlutterEngineCreateAOTData(const FlutterEngineAOTDataSource *source,
+                           FlutterEngineAOTData *data_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Collects the AOT data.
@@ -2312,12 +2294,10 @@ FlutterEngineResult FlutterEngineCollectAOTData(FlutterEngineAOTData data);
 /// @return     The result of the call to run the Flutter engine.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineRun(size_t version,
-                                     const FlutterRendererConfig* config,
-                                     const FlutterProjectArgs* args,
-                                     void* user_data,
-                                     FLUTTER_API_SYMBOL(FlutterEngine) *
-                                         engine_out);
+FlutterEngineResult
+FlutterEngineRun(size_t version, const FlutterRendererConfig *config,
+                 const FlutterProjectArgs *args, void *user_data,
+                 FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Shuts down a Flutter engine instance. The engine handle is no
@@ -2355,12 +2335,10 @@ FlutterEngineResult FlutterEngineShutdown(FLUTTER_API_SYMBOL(FlutterEngine)
 /// @return     The result of the call to initialize the Flutter engine.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineInitialize(size_t version,
-                                            const FlutterRendererConfig* config,
-                                            const FlutterProjectArgs* args,
-                                            void* user_data,
-                                            FLUTTER_API_SYMBOL(FlutterEngine) *
-                                                engine_out);
+FlutterEngineResult
+FlutterEngineInitialize(size_t version, const FlutterRendererConfig *config,
+                        const FlutterProjectArgs *args, void *user_data,
+                        FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Stops running the Flutter engine instance. After this call, the
@@ -2391,19 +2369,19 @@ FlutterEngineResult FlutterEngineDeinitialize(FLUTTER_API_SYMBOL(FlutterEngine)
 ///             engine instance.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineRunInitialized(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+FlutterEngineResult
+    FlutterEngineRunInitialized(FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineSendWindowMetricsEvent(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterWindowMetricsEvent* event);
+FlutterEngineResult
+FlutterEngineSendWindowMetricsEvent(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                    const FlutterWindowMetricsEvent *event);
 
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineSendPointerEvent(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterPointerEvent* events,
-    size_t events_count);
+FlutterEngineResult
+FlutterEngineSendPointerEvent(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                              const FlutterPointerEvent *events,
+                              size_t events_count);
 
 //------------------------------------------------------------------------------
 /// @brief      Sends a key event to the engine. The framework will decide
@@ -2427,14 +2405,14 @@ FlutterEngineResult FlutterEngineSendPointerEvent(
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineSendKeyEvent(FLUTTER_API_SYMBOL(FlutterEngine)
                                                   engine,
-                                              const FlutterKeyEvent* event,
+                                              const FlutterKeyEvent *event,
                                               FlutterKeyEventCallback callback,
-                                              void* user_data);
+                                              void *user_data);
 
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineSendPlatformMessage(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterPlatformMessage* message);
+FlutterEngineResult
+FlutterEngineSendPlatformMessage(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                 const FlutterPlatformMessage *message);
 
 //------------------------------------------------------------------------------
 /// @brief     Creates a platform message response handle that allows the
@@ -2467,10 +2445,8 @@ FlutterEngineResult FlutterEngineSendPlatformMessage(
 ///
 FLUTTER_EXPORT
 FlutterEngineResult FlutterPlatformMessageCreateResponseHandle(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterDataCallback data_callback,
-    void* user_data,
-    FlutterPlatformMessageResponseHandle** response_out);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, FlutterDataCallback data_callback,
+    void *user_data, FlutterPlatformMessageResponseHandle **response_out);
 
 //------------------------------------------------------------------------------
 /// @brief      Collects the handle created using
@@ -2488,7 +2464,7 @@ FlutterEngineResult FlutterPlatformMessageCreateResponseHandle(
 FLUTTER_EXPORT
 FlutterEngineResult FlutterPlatformMessageReleaseResponseHandle(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterPlatformMessageResponseHandle* response);
+    FlutterPlatformMessageResponseHandle *response);
 
 //------------------------------------------------------------------------------
 /// @brief      Send a response from the native side to a platform message from
@@ -2505,8 +2481,7 @@ FlutterEngineResult FlutterPlatformMessageReleaseResponseHandle(
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineSendPlatformMessageResponse(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterPlatformMessageResponseHandle* handle,
-    const uint8_t* data,
+    const FlutterPlatformMessageResponseHandle *handle, const uint8_t *data,
     size_t data_length);
 
 //------------------------------------------------------------------------------
@@ -2545,9 +2520,9 @@ FlutterEngineResult __FlutterEngineFlushPendingTasksNow();
 /// @return     The result of the call.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineRegisterExternalTexture(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    int64_t texture_identifier);
+FlutterEngineResult
+FlutterEngineRegisterExternalTexture(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                     int64_t texture_identifier);
 
 //------------------------------------------------------------------------------
 /// @brief      Unregister a previous texture registration.
@@ -2562,9 +2537,9 @@ FlutterEngineResult FlutterEngineRegisterExternalTexture(
 /// @return     The result of the call.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineUnregisterExternalTexture(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    int64_t texture_identifier);
+FlutterEngineResult
+FlutterEngineUnregisterExternalTexture(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                       int64_t texture_identifier);
 
 //------------------------------------------------------------------------------
 /// @brief      Mark that a new texture frame is available for a given texture
@@ -2581,8 +2556,7 @@ FlutterEngineResult FlutterEngineUnregisterExternalTexture(
 ///
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineMarkExternalTextureFrameAvailable(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    int64_t texture_identifier);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, int64_t texture_identifier);
 
 //------------------------------------------------------------------------------
 /// @brief      Enable or disable accessibility semantics.
@@ -2597,9 +2571,9 @@ FlutterEngineResult FlutterEngineMarkExternalTextureFrameAvailable(
 /// @return     The result of the call.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineUpdateSemanticsEnabled(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    bool enabled);
+FlutterEngineResult
+FlutterEngineUpdateSemanticsEnabled(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                    bool enabled);
 
 //------------------------------------------------------------------------------
 /// @brief      Sets additional accessibility features.
@@ -2610,9 +2584,10 @@ FlutterEngineResult FlutterEngineUpdateSemanticsEnabled(
 /// @return     The result of the call.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineUpdateAccessibilityFeatures(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterAccessibilityFeature features);
+FlutterEngineResult
+FlutterEngineUpdateAccessibilityFeatures(FLUTTER_API_SYMBOL(FlutterEngine)
+                                             engine,
+                                         FlutterAccessibilityFeature features);
 
 //------------------------------------------------------------------------------
 /// @brief      Dispatch a semantics action to the specified semantics node.
@@ -2627,11 +2602,8 @@ FlutterEngineResult FlutterEngineUpdateAccessibilityFeatures(
 ///
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineDispatchSemanticsAction(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    uint64_t node_id,
-    FlutterSemanticsAction action,
-    const uint8_t* data,
-    size_t data_length);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, uint64_t node_id,
+    FlutterSemanticsAction action, const uint8_t *data, size_t data_length);
 
 //------------------------------------------------------------------------------
 /// @brief      Notify the engine that a vsync event occurred. A baton passed to
@@ -2679,8 +2651,8 @@ FlutterEngineResult FlutterEngineOnVsync(FLUTTER_API_SYMBOL(FlutterEngine)
 /// @return     The result of the call.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineReloadSystemFonts(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+FlutterEngineResult
+    FlutterEngineReloadSystemFonts(FLUTTER_API_SYMBOL(FlutterEngine) engine);
 
 //------------------------------------------------------------------------------
 /// @brief      A profiling utility. Logs a trace duration begin event to the
@@ -2694,7 +2666,7 @@ FlutterEngineResult FlutterEngineReloadSystemFonts(
 /// @param[in]  name  The name of the trace event.
 ///
 FLUTTER_EXPORT
-void FlutterEngineTraceEventDurationBegin(const char* name);
+void FlutterEngineTraceEventDurationBegin(const char *name);
 
 //-----------------------------------------------------------------------------
 /// @brief      A profiling utility. Logs a trace duration end event to the
@@ -2708,7 +2680,7 @@ void FlutterEngineTraceEventDurationBegin(const char* name);
 /// @param[in]  name  The name of the trace event.
 ///
 FLUTTER_EXPORT
-void FlutterEngineTraceEventDurationEnd(const char* name);
+void FlutterEngineTraceEventDurationEnd(const char *name);
 
 //-----------------------------------------------------------------------------
 /// @brief      A profiling utility. Logs a trace duration instant event to the
@@ -2720,7 +2692,7 @@ void FlutterEngineTraceEventDurationEnd(const char* name);
 /// @param[in]  name  The name of the trace event.
 ///
 FLUTTER_EXPORT
-void FlutterEngineTraceEventInstant(const char* name);
+void FlutterEngineTraceEventInstant(const char *name);
 
 //------------------------------------------------------------------------------
 /// @brief      Posts a task onto the Flutter render thread. Typically, this may
@@ -2734,10 +2706,9 @@ void FlutterEngineTraceEventInstant(const char* name);
 /// @return     The result of the call.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEnginePostRenderThreadTask(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    VoidCallback callback,
-    void* callback_data);
+FlutterEngineResult
+FlutterEnginePostRenderThreadTask(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                  VoidCallback callback, void *callback_data);
 
 //------------------------------------------------------------------------------
 /// @brief      Get the current time in nanoseconds from the clock used by the
@@ -2763,7 +2734,7 @@ uint64_t FlutterEngineGetCurrentTime();
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineRunTask(FLUTTER_API_SYMBOL(FlutterEngine)
                                              engine,
-                                         const FlutterTask* task);
+                                         const FlutterTask *task);
 
 //------------------------------------------------------------------------------
 /// @brief      Notify a running engine instance that the locale has been
@@ -2780,7 +2751,7 @@ FlutterEngineResult FlutterEngineRunTask(FLUTTER_API_SYMBOL(FlutterEngine)
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEngineUpdateLocales(FLUTTER_API_SYMBOL(FlutterEngine)
                                                    engine,
-                                               const FlutterLocale** locales,
+                                               const FlutterLocale **locales,
                                                size_t locales_count);
 
 //------------------------------------------------------------------------------
@@ -2829,10 +2800,10 @@ bool FlutterEngineRunsAOTCompiledDartCode(void);
 /// @return     If the message was posted to the send port.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEnginePostDartObject(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterEngineDartPort port,
-    const FlutterEngineDartObject* object);
+FlutterEngineResult
+FlutterEnginePostDartObject(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                            FlutterEngineDartPort port,
+                            const FlutterEngineDartObject *object);
 
 //------------------------------------------------------------------------------
 /// @brief      Posts a low memory notification to a running engine instance.
@@ -2852,8 +2823,9 @@ FlutterEngineResult FlutterEnginePostDartObject(
 ///             instance.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineNotifyLowMemoryWarning(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine);
+FlutterEngineResult
+    FlutterEngineNotifyLowMemoryWarning(FLUTTER_API_SYMBOL(FlutterEngine)
+                                            engine);
 
 //------------------------------------------------------------------------------
 /// @brief      Schedule a callback to be run on all engine managed threads.
@@ -2891,8 +2863,7 @@ FlutterEngineResult FlutterEngineNotifyLowMemoryWarning(
 FLUTTER_EXPORT
 FlutterEngineResult FlutterEnginePostCallbackOnAllNativeThreads(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterNativeThreadCallback callback,
-    void* user_data);
+    FlutterNativeThreadCallback callback, void *user_data);
 
 //------------------------------------------------------------------------------
 /// @brief    Posts updates corresponding to display changes to a running engine
@@ -2905,11 +2876,11 @@ FlutterEngineResult FlutterEnginePostCallbackOnAllNativeThreads(
 /// @return the result of the call made to the engine.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineNotifyDisplayUpdate(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterEngineDisplaysUpdateType update_type,
-    const FlutterEngineDisplay* displays,
-    size_t display_count);
+FlutterEngineResult
+FlutterEngineNotifyDisplayUpdate(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                 FlutterEngineDisplaysUpdateType update_type,
+                                 const FlutterEngineDisplay *displays,
+                                 size_t display_count);
 
 //------------------------------------------------------------------------------
 /// @brief      Schedule a new frame to redraw the content.
@@ -2937,32 +2908,26 @@ FlutterEngineResult FlutterEngineScheduleFrame(FLUTTER_API_SYMBOL(FlutterEngine)
 /// @return     The result of the call.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineSetNextFrameCallback(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    VoidCallback callback,
-    void* user_data);
+FlutterEngineResult
+FlutterEngineSetNextFrameCallback(FLUTTER_API_SYMBOL(FlutterEngine) engine,
+                                  VoidCallback callback, void *user_data);
 
-#endif  // !FLUTTER_ENGINE_NO_PROTOTYPES
+#endif // !FLUTTER_ENGINE_NO_PROTOTYPES
 
 // Typedefs for the function pointers in FlutterEngineProcTable.
 typedef FlutterEngineResult (*FlutterEngineCreateAOTDataFnPtr)(
-    const FlutterEngineAOTDataSource* source,
-    FlutterEngineAOTData* data_out);
+    const FlutterEngineAOTDataSource *source, FlutterEngineAOTData *data_out);
 typedef FlutterEngineResult (*FlutterEngineCollectAOTDataFnPtr)(
     FlutterEngineAOTData data);
 typedef FlutterEngineResult (*FlutterEngineRunFnPtr)(
-    size_t version,
-    const FlutterRendererConfig* config,
-    const FlutterProjectArgs* args,
-    void* user_data,
+    size_t version, const FlutterRendererConfig *config,
+    const FlutterProjectArgs *args, void *user_data,
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 typedef FlutterEngineResult (*FlutterEngineShutdownFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 typedef FlutterEngineResult (*FlutterEngineInitializeFnPtr)(
-    size_t version,
-    const FlutterRendererConfig* config,
-    const FlutterProjectArgs* args,
-    void* user_data,
+    size_t version, const FlutterRendererConfig *config,
+    const FlutterProjectArgs *args, void *user_data,
     FLUTTER_API_SYMBOL(FlutterEngine) * engine_out);
 typedef FlutterEngineResult (*FlutterEngineDeinitializeFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
@@ -2970,100 +2935,78 @@ typedef FlutterEngineResult (*FlutterEngineRunInitializedFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 typedef FlutterEngineResult (*FlutterEngineSendWindowMetricsEventFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterWindowMetricsEvent* event);
+    const FlutterWindowMetricsEvent *event);
 typedef FlutterEngineResult (*FlutterEngineSendPointerEventFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterPointerEvent* events,
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, const FlutterPointerEvent *events,
     size_t events_count);
 typedef FlutterEngineResult (*FlutterEngineSendKeyEventFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterKeyEvent* event,
-    FlutterKeyEventCallback callback,
-    void* user_data);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, const FlutterKeyEvent *event,
+    FlutterKeyEventCallback callback, void *user_data);
 typedef FlutterEngineResult (*FlutterEngineSendPlatformMessageFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterPlatformMessage* message);
+    const FlutterPlatformMessage *message);
 typedef FlutterEngineResult (
     *FlutterEnginePlatformMessageCreateResponseHandleFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterDataCallback data_callback,
-    void* user_data,
-    FlutterPlatformMessageResponseHandle** response_out);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, FlutterDataCallback data_callback,
+    void *user_data, FlutterPlatformMessageResponseHandle **response_out);
 typedef FlutterEngineResult (
     *FlutterEnginePlatformMessageReleaseResponseHandleFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterPlatformMessageResponseHandle* response);
+    FlutterPlatformMessageResponseHandle *response);
 typedef FlutterEngineResult (*FlutterEngineSendPlatformMessageResponseFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterPlatformMessageResponseHandle* handle,
-    const uint8_t* data,
+    const FlutterPlatformMessageResponseHandle *handle, const uint8_t *data,
     size_t data_length);
 typedef FlutterEngineResult (*FlutterEngineRegisterExternalTextureFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    int64_t texture_identifier);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, int64_t texture_identifier);
 typedef FlutterEngineResult (*FlutterEngineUnregisterExternalTextureFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    int64_t texture_identifier);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, int64_t texture_identifier);
 typedef FlutterEngineResult (
     *FlutterEngineMarkExternalTextureFrameAvailableFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    int64_t texture_identifier);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, int64_t texture_identifier);
 typedef FlutterEngineResult (*FlutterEngineUpdateSemanticsEnabledFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    bool enabled);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, bool enabled);
 typedef FlutterEngineResult (*FlutterEngineUpdateAccessibilityFeaturesFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     FlutterAccessibilityFeature features);
 typedef FlutterEngineResult (*FlutterEngineDispatchSemanticsActionFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    uint64_t id,
-    FlutterSemanticsAction action,
-    const uint8_t* data,
-    size_t data_length);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, uint64_t id,
+    FlutterSemanticsAction action, const uint8_t *data, size_t data_length);
 typedef FlutterEngineResult (*FlutterEngineOnVsyncFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    intptr_t baton,
-    uint64_t frame_start_time_nanos,
-    uint64_t frame_target_time_nanos);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, intptr_t baton,
+    uint64_t frame_start_time_nanos, uint64_t frame_target_time_nanos);
 typedef FlutterEngineResult (*FlutterEngineReloadSystemFontsFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
-typedef void (*FlutterEngineTraceEventDurationBeginFnPtr)(const char* name);
-typedef void (*FlutterEngineTraceEventDurationEndFnPtr)(const char* name);
-typedef void (*FlutterEngineTraceEventInstantFnPtr)(const char* name);
+typedef void (*FlutterEngineTraceEventDurationBeginFnPtr)(const char *name);
+typedef void (*FlutterEngineTraceEventDurationEndFnPtr)(const char *name);
+typedef void (*FlutterEngineTraceEventInstantFnPtr)(const char *name);
 typedef FlutterEngineResult (*FlutterEnginePostRenderThreadTaskFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    VoidCallback callback,
-    void* callback_data);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, VoidCallback callback,
+    void *callback_data);
 typedef uint64_t (*FlutterEngineGetCurrentTimeFnPtr)();
 typedef FlutterEngineResult (*FlutterEngineRunTaskFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterTask* task);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, const FlutterTask *task);
 typedef FlutterEngineResult (*FlutterEngineUpdateLocalesFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    const FlutterLocale** locales,
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, const FlutterLocale **locales,
     size_t locales_count);
 typedef bool (*FlutterEngineRunsAOTCompiledDartCodeFnPtr)(void);
 typedef FlutterEngineResult (*FlutterEnginePostDartObjectFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterEngineDartPort port,
-    const FlutterEngineDartObject* object);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, FlutterEngineDartPort port,
+    const FlutterEngineDartObject *object);
 typedef FlutterEngineResult (*FlutterEngineNotifyLowMemoryWarningFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 typedef FlutterEngineResult (*FlutterEnginePostCallbackOnAllNativeThreadsFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    FlutterNativeThreadCallback callback,
-    void* user_data);
+    FlutterNativeThreadCallback callback, void *user_data);
 typedef FlutterEngineResult (*FlutterEngineNotifyDisplayUpdateFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine,
     FlutterEngineDisplaysUpdateType update_type,
-    const FlutterEngineDisplay* displays,
-    size_t display_count);
+    const FlutterEngineDisplay *displays, size_t display_count);
 typedef FlutterEngineResult (*FlutterEngineScheduleFrameFnPtr)(
     FLUTTER_API_SYMBOL(FlutterEngine) engine);
 typedef FlutterEngineResult (*FlutterEngineSetNextFrameCallbackFnPtr)(
-    FLUTTER_API_SYMBOL(FlutterEngine) engine,
-    VoidCallback callback,
-    void* user_data);
+    FLUTTER_API_SYMBOL(FlutterEngine) engine, VoidCallback callback,
+    void *user_data);
 
 /// Function-pointer-based versions of the APIs above.
 typedef struct {
@@ -3121,11 +3064,11 @@ typedef struct {
 /// @return     Returns whether the table was successfully populated.
 ///
 FLUTTER_EXPORT
-FlutterEngineResult FlutterEngineGetProcAddresses(
-    FlutterEngineProcTable* table);
+FlutterEngineResult
+FlutterEngineGetProcAddresses(FlutterEngineProcTable *table);
 
 #if defined(__cplusplus)
-}  // extern "C"
+} // extern "C"
 #endif
 
-#endif  // FLUTTER_EMBEDDER_H_
+#endif // FLUTTER_EMBEDDER_H_

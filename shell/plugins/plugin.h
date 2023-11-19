@@ -2,37 +2,74 @@
 #ifndef ISABEL_SHELL_PLUGIN_H
 #define ISABEL_SHELL_PLUGIN_H
 
+#include <cstring>
 #include <memory>
 #include <utility>
 
 #include "shell/dispatcher.h"
+#include "shell/log.h"
 
-#include <rapidjson/document.h>
+#include <json-c/json.h>
 
 namespace shell::plugins {
 
 class MethodArguments {
 public:
-  virtual void serialize(rapidjson::Document &) = 0;
+  virtual void deserialize(struct json_object *){};
+  virtual void serialize(struct json_object *){};
 };
 
 class MethodCall {
 public:
-  MethodCall(const char *message, size_t length) {
-    m_document.Parse(message, length);
+  explicit MethodCall(const char *message, size_t length) {
+    char *n_message = static_cast<char *>(malloc(length + 1));
+    memcpy(n_message, message, length);
+    n_message[length] = '\0';
+
+    m_object = json_tokener_parse(n_message);
+
+    free(n_message);
   }
 
-  auto method() { return std::string(m_document["method"].GetString()); }
+  explicit MethodCall(std::string_view method,
+                      std::shared_ptr<MethodArguments> args)
+      : m_args(std::move(args)), m_method(method) {
+    m_object = json_object_new_object();
+
+    auto method_object = json_object_new_string(m_method.data());
+    json_object_object_add(m_object, "method", method_object);
+
+    // TODO: Hack, not all argument serializers want arrays.
+    auto args_object = json_object_new_array();
+    m_args->serialize(args_object);
+    json_object_object_add(m_object, "args", args_object);
+  }
+
+  ~MethodCall() {
+    json_object_put(m_object);
+    m_object = nullptr;
+  }
+
+  std::string method() {
+    return {json_object_get_string(json_object_object_get(m_object, "method"))};
+  }
 
   template <typename T, typename... Args>
   std::unique_ptr<T> args(Args &&...args) {
     auto object = std::make_unique<T>(std::forward<Args>(args)...);
-    object->serialize(m_document);
+    struct json_object *arguments_obj =
+        json_object_object_get(m_object, "args");
+    object->deserialize(arguments_obj);
     return object;
   }
 
+  const char *build() { return json_object_to_json_string(m_object); }
+
 private:
-  rapidjson::Document m_document;
+  std::string m_method;
+  std::shared_ptr<MethodArguments> m_args;
+
+  struct json_object *m_object;
 };
 
 class Plugin {

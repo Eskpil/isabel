@@ -68,8 +68,8 @@ private:
 
   void update_window_metrics(int, int, int);
 
-  void handle_key_pressed(uint32_t keycode, bool pressed, uint32_t serial,
-                          size_t timestamp);
+  void handle_key_pressed(uint32_t keycode, uint32_t symbol, bool pressed,
+                          uint32_t serial, size_t timestamp);
 
   void handle_pointer_motion(double x, double y, size_t timestamp);
   void handle_pointer_enter(double x, double y);

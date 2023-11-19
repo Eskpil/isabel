@@ -14,13 +14,15 @@ class TextInput : public Plugin {
 public:
   TextInput(std::shared_ptr<Dispatcher>);
 
-  void handle_key_event(uint32_t, bool);
+  void handle_key_event(uint32_t, uint32_t, bool);
 
   std::string_view name() { return "text_input"; }
 
 private:
   void handle_message(const FlutterPlatformMessage *);
+  void publish_state(TextModel &model);
 
+  int m_active_client_id;
   std::unique_ptr<TextModel> m_active_model;
 };
 } // namespace shell::plugins
