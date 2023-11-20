@@ -68,16 +68,12 @@ void TextInput::handle_message(const FlutterPlatformMessage *message) {
       reinterpret_cast<const char *>(message->message), message->message_size);
 
   if (method_call.method() == k_set_client_method) {
-    log::info("set client");
 
     auto args = method_call.args<SetClientArgs>();
     m_active_model = std::make_unique<TextModel>();
     m_active_client_id = args->client_id;
     m_active_input_action = args->input_action;
     m_active_input_type = args->input_type;
-
-    log::info("client id {}", args->client_id);
-    log::info("keyboard appearance {}", args->keyboard_appearance);
   } else if (method_call.method() == k_set_editing_state_method) {
     auto args = method_call.args<SetEditingStateArgs>();
 
