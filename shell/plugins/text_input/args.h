@@ -162,32 +162,32 @@ public:
     }
     {
       auto selection_base_obj = json_object_object_get(object, "selectionBase");
-      selectionBase = json_object_get_int(selection_base_obj);
+      selection_base = json_object_get_int(selection_base_obj);
     }
     {
       auto selection_extent_obj =
           json_object_object_get(object, "selectionExtent");
-      selectionExtent = json_object_get_int(selection_extent_obj);
+      selection_extent = json_object_get_int(selection_extent_obj);
     }
     {
       auto selection_affinity_obj =
           json_object_object_get(object, "selectionAffinity");
-      selectionAffinity =
+      selection_affinity =
           std::string_view(json_object_get_string(selection_affinity_obj));
     }
     {
       auto selection_is_directional_obj =
           json_object_object_get(object, "selectionIsDirectional");
-      selectionIsDirectional =
+      selection_is_directional =
           json_object_get_boolean(selection_is_directional_obj);
     }
   }
 
   std::string text;
-  int selectionBase;
-  int selectionExtent;
-  std::string selectionAffinity;
-  bool selectionIsDirectional;
+  int selection_base;
+  int selection_extent;
+  std::string selection_affinity;
+  bool selection_is_directional;
 };
 
 class PerformActionArgs : public MethodArguments {

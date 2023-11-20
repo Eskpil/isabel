@@ -78,8 +78,8 @@ void TextInput::handle_message(const FlutterPlatformMessage *message) {
     auto args = method_call.args<SetEditingStateArgs>();
 
     // Flutter uses -1/-1 for invalid; translate that to 0/0 for the model.
-    int base = args->selectionBase;
-    int extent = args->selectionExtent;
+    int base = args->selection_base;
+    int extent = args->selection_extent;
     if (base == -1 && extent == -1) {
       base = extent = 0;
     }
