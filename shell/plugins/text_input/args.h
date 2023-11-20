@@ -155,15 +155,39 @@ public:
 
 class SetEditingStateArgs : public MethodArguments {
 public:
-  void deserialize(struct json_object *object) {}
+  void deserialize(struct json_object *object) {
+    {
+      auto text_obj = json_object_object_get(object, "text");
+      text = std::string_view(json_object_get_string(text_obj));
+    }
+    {
+      auto selection_base_obj = json_object_object_get(object, "selectionBase");
+      selectionBase = json_object_get_int(selection_base_obj);
+    }
+    {
+      auto selection_extent_obj =
+          json_object_object_get(object, "selectionExtent");
+      selectionExtent = json_object_get_int(selection_extent_obj);
+    }
+    {
+      auto selection_affinity_obj =
+          json_object_object_get(object, "selectionAffinity");
+      selectionAffinity =
+          std::string_view(json_object_get_string(selection_affinity_obj));
+    }
+    {
+      auto selection_is_directional_obj =
+          json_object_object_get(object, "selectionIsDirectional");
+      selectionIsDirectional =
+          json_object_get_boolean(selection_is_directional_obj);
+    }
+  }
 
   std::string text;
   int selectionBase;
   int selectionExtent;
   std::string selectionAffinity;
   bool selectionIsDirectional;
-  int composingBase;
-  int composingExtent;
 };
 
 } // namespace shell::plugins
