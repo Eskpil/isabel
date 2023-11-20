@@ -107,6 +107,10 @@ public:
 
   bool move_cursor_back();
   bool move_cursor_forward();
+  bool move_cursor_to_beginning();
+  bool move_cursor_to_end();
+
+  bool backspace();
 
   TextRange text_range() { return TextRange(0, m_text.length()); }
 

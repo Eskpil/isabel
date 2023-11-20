@@ -102,6 +102,43 @@ bool TextModel::move_cursor_back() {
   return false;
 }
 
+bool TextModel::move_cursor_to_beginning() {
+  size_t min_pos = editable_range().start();
+  if (m_selection.collapsed() && m_selection.position() == min_pos) {
+    return false;
+  }
+  m_selection = TextRange(min_pos);
+  return true;
+}
+
+bool TextModel::move_cursor_to_end() {
+  size_t max_pos = editable_range().end();
+  if (m_selection.collapsed() && m_selection.position() == max_pos) {
+    return false;
+  }
+  m_selection = TextRange(max_pos);
+  return true;
+}
+
+bool TextModel::backspace() {
+  if (delete_selected()) {
+    return true;
+  }
+  // There is no selection. Delete the preceding codepoint.
+  size_t position = m_selection.position();
+  if (position != editable_range().start()) {
+    int count = is_trailing_surrogate(m_text.at(position - 1)) ? 2 : 1;
+    m_text.erase(position - count, count);
+    m_selection = TextRange(position - count);
+    if (composing()) {
+      m_composing_range.set_end(m_composing_range.end() - count);
+    }
+    return true;
+  }
+
+  return false;
+}
+
 bool TextModel::delete_selected() {
   if (m_selection.collapsed()) {
     return false;

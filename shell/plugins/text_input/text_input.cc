@@ -34,6 +34,15 @@ void TextInput::handle_key_event(uint32_t keycode, uint32_t symbol,
   case XKB_KEY_Right:
     changed = m_active_model->move_cursor_forward();
     break;
+  case XKB_KEY_BackSpace:
+    changed = m_active_model->backspace();
+    break;
+  case XKB_KEY_Home:
+    changed = m_active_model->move_cursor_to_beginning();
+    break;
+  case XKB_KEY_End:
+    changed = m_active_model->move_cursor_to_end();
+    break;
   default:
     auto code_point = xkb_keysym_to_utf32(symbol);
     if (code_point) {
