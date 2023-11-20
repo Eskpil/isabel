@@ -14,6 +14,8 @@ static const std::string_view k_set_editing_state_method =
     "TextInput.setEditingState";
 static const std::string_view k_update_editing_state_method =
     "TextInputClient.updateEditingState";
+static const std::string_view k_perform_action_method =
+    "TextInputClient.performAction";
 
 TextInput::TextInput(std::shared_ptr<Dispatcher> dispatch) : Plugin(dispatch) {
   dispatcher()->on(k_channel, [this](const FlutterPlatformMessage *message) {
@@ -43,6 +45,9 @@ void TextInput::handle_key_event(uint32_t keycode, uint32_t symbol,
   case XKB_KEY_End:
     changed = m_active_model->move_cursor_to_end();
     break;
+  case XKB_KEY_Return:
+    enter_pressed();
+    break;
   default:
     auto code_point = xkb_keysym_to_utf32(symbol);
     if (code_point) {
@@ -55,7 +60,7 @@ void TextInput::handle_key_event(uint32_t keycode, uint32_t symbol,
   if (!changed)
     return;
 
-  publish_state(*m_active_model);
+  publish_state();
 }
 
 void TextInput::handle_message(const FlutterPlatformMessage *message) {
@@ -68,6 +73,8 @@ void TextInput::handle_message(const FlutterPlatformMessage *message) {
     auto args = method_call.args<SetClientArgs>();
     m_active_model = std::make_unique<TextModel>();
     m_active_client_id = args->client_id;
+    m_active_input_action = args->input_action;
+    m_active_input_type = args->input_type;
 
     log::info("client id {}", args->client_id);
     log::info("keyboard appearance {}", args->keyboard_appearance);
@@ -86,7 +93,7 @@ void TextInput::handle_message(const FlutterPlatformMessage *message) {
   }
 }
 
-void TextInput::publish_state(TextModel &model) {
+void TextInput::publish_state() {
   if (!m_active_model)
     return;
 
@@ -107,6 +114,24 @@ void TextInput::publish_state(TextModel &model) {
 
   dispatcher()->call(k_channel, std::make_unique<MethodCall>(
                                     k_update_editing_state_method, args));
+}
+
+void TextInput::enter_pressed() {
+  if (!m_active_model)
+    return;
+
+  if (m_active_input_type == "TextInputType.multiline") {
+    m_active_model->add_codepoint('\n');
+    publish_state();
+  }
+
+  auto args = std::make_shared<PerformActionArgs>();
+
+  args->client_id = m_active_client_id;
+  args->input_action = m_active_input_action;
+
+  dispatcher()->call(
+      k_channel, std::make_unique<MethodCall>(k_perform_action_method, args));
 }
 
 } // namespace shell::plugins

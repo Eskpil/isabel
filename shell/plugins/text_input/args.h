@@ -190,6 +190,23 @@ public:
   bool selectionIsDirectional;
 };
 
+class PerformActionArgs : public MethodArguments {
+public:
+  void serialize(struct json_object *object) {
+    {
+      auto client_id_obj = json_object_new_int(client_id);
+      json_object_array_add(object, client_id_obj);
+    }
+    {
+      auto input_action_obj = json_object_new_string(input_action.data());
+      json_object_array_add(object, input_action_obj);
+    }
+  }
+
+  int client_id;
+  std::string input_action;
+};
+
 } // namespace shell::plugins
 
 #endif // ISABEL_SHELL_PLUGINS_TEXT_INPUT_ARGS_H

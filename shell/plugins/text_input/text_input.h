@@ -20,10 +20,13 @@ public:
 
 private:
   void handle_message(const FlutterPlatformMessage *);
-  void publish_state(TextModel &model);
+  void publish_state();
+  void enter_pressed();
 
   int m_active_client_id;
   std::unique_ptr<TextModel> m_active_model;
+  std::string m_active_input_action;
+  std::string m_active_input_type;
 };
 } // namespace shell::plugins
 
