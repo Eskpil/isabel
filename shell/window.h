@@ -23,20 +23,24 @@ public:
   ~Window() = default;
 
   void set_title(std::string_view);
+
 private:
   static const struct aylin_shell_listener k_window_listener;
 
   void configure(Application *) override;
+  void initiate_move(uint32_t) override;
+  int width() override;
+  int height() override;
 
-  WindowOptions m_options { 0 };
+  WindowOptions m_options{0};
 
-  bool first_frame { true };
+  bool first_frame{true};
 
   struct aylin_shell *m_shell;
   Application *m_application;
 
   int m_width, m_height;
 };
-}
+} // namespace shell
 
 #endif // ISABEL_SHELL_WINDOW_H_

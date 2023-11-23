@@ -17,6 +17,7 @@ class MethodArguments {
 public:
   virtual void deserialize(struct json_object *){};
   virtual void serialize(struct json_object *){};
+  virtual enum json_type type() { return json_type_array; };
 };
 
 class MethodCall {
@@ -39,8 +40,22 @@ public:
     auto method_object = json_object_new_string(m_method.data());
     json_object_object_add(m_object, "method", method_object);
 
+    struct json_object *args_object = nullptr;
     // TODO: Hack, not all argument serializers want arrays.
-    auto args_object = json_object_new_array();
+    switch (m_args->type()) {
+    case json_type_object:
+      args_object = json_object_new_object();
+      break;
+    case json_type_array:
+      args_object = json_object_new_array();
+      break;
+    default:
+      log::fatal("can not handle json type: {}",
+                 static_cast<int>(m_args->type()));
+      break;
+    }
+    json_object_new_array();
+
     m_args->serialize(args_object);
     json_object_object_add(m_object, "args", args_object);
   }

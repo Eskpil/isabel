@@ -85,16 +85,17 @@ const struct aylin_shell_listener Window::k_window_listener = {
             return;
           }
 
-          window->handle_pointer_button(event->x, event->y,
-                                        event->action == press, button,
-                                        static_cast<size_t>(event->timestamp));
+          window->handle_pointer_button(
+              event->x, event->y, event->action == press, button,
+              static_cast<size_t>(event->timestamp), event->serial);
         },
     .pointer_motion =
         [](struct aylin_shell *shell,
            struct aylin_shell_pointer_motion_event *event, void *userdata) {
           auto window = reinterpret_cast<Window *>(userdata);
           window->handle_pointer_motion(event->x, event->y,
-                                        static_cast<size_t>(event->timestamp));
+                                        static_cast<size_t>(event->timestamp),
+                                        event->serial);
         },
     .key_pressed =
         [](struct aylin_shell *shell,
@@ -104,24 +105,8 @@ const struct aylin_shell_listener Window::k_window_listener = {
                                      event->action == press, event->serial,
                                      static_cast<size_t>(event->timestamp));
         },
-    .frame =
-        [](struct aylin_shell *shell, struct aylin_shell_frame_event *event,
-           void *userdata) {
-          auto window = reinterpret_cast<Window *>(userdata);
-
-          // log::info("received frame event");
-
-          if (window->first_frame) {
-            window->m_egl_target =
-                create_egl_target(shell, window->m_width, window->m_height);
-            window->m_primary_surface =
-                window->m_egl_target->create_onscreen_surface();
-            window->m_resource_surface =
-                window->m_egl_target->create_offscreen_surface();
-
-            window->first_frame = false;
-          }
-        },
+    .frame = [](struct aylin_shell *shell,
+                struct aylin_shell_frame_event *event, void *userdata) {},
 };
 
 Window::Window(shell::WindowOptions options)
@@ -141,6 +126,10 @@ void Window::configure(shell::Application *app) {
     log::fatal("could not create window: ({})", strerror(errno));
   }
 
+  m_egl_target = create_egl_target(m_shell, m_width, m_height);
+  m_primary_surface = m_egl_target->create_onscreen_surface();
+  m_resource_surface = m_egl_target->create_offscreen_surface();
+
   aylin_window_set_title(m_shell, const_cast<char *>(m_options.title.data()));
 }
 
@@ -151,5 +140,13 @@ void Window::set_title(std::string_view title) {
     aylin_window_set_title(m_shell, const_cast<char *>(title.data()));
   }
 }
+
+void Window::initiate_move(uint32_t serial) {
+  aylin_window_move(m_shell, serial);
+}
+
+int Window::width() { return m_width; }
+
+int Window::height() { return m_height; }
 
 } // namespace shell

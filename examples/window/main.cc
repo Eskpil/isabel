@@ -10,8 +10,8 @@ int main() {
   // Currently, the example is expected to be executed from the build/
   // directory.
   auto window = std::make_unique<shell::Window>(shell::WindowOptions{
-      .width = 1280,
-      .height = 720,
+      .width = 720,
+      .height = 480,
       .title = "Example 1",
 
       .icudtl_path = "../demo/icudtl.dat",

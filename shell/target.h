@@ -55,12 +55,17 @@ class Target {
   friend class Application;
   friend class Window;
 
+public:
   Target(std::string_view, std::string_view);
 
   void run();
 
+  virtual void initiate_move(uint32_t serial) = 0;
+
 private:
   virtual void configure(Application *) = 0;
+  virtual int width() = 0;
+  virtual int height() = 0;
 
   void create_platform_listeners();
 
@@ -71,12 +76,13 @@ private:
   void handle_key_pressed(uint32_t keycode, uint32_t symbol, bool pressed,
                           uint32_t serial, size_t timestamp);
 
-  void handle_pointer_motion(double x, double y, size_t timestamp);
+  void handle_pointer_motion(double x, double y, size_t timestamp,
+                             uint32_t serial);
   void handle_pointer_enter(double x, double y);
   void handle_pointer_leave();
   void handle_pointer_button(double x, double y, bool pressed,
                              FlutterPointerMouseButtons button,
-                             size_t timestamp);
+                             size_t timestamp, uint32_t serial);
 
   bool m_configured{false};
   bool m_engine_is_running{false};
@@ -89,7 +95,6 @@ private:
 
   // TODO: Separate out into some kind of cache/struct.
   FlutterPointerPhase m_last_pointer_phase;
-  FlutterPointerMouseButtons m_last_pointer_button;
 
   std::unique_ptr<TaskRunner> m_task_runner;
   std::unique_ptr<PluginManager> m_plugins;

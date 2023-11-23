@@ -3,6 +3,7 @@
 #include "shell/log.h"
 #include "shell/target.h"
 
+#include "shell/plugins/decorations/decorations.h"
 #include "shell/plugins/text_input/text_input.h"
 
 namespace shell {
@@ -103,6 +104,7 @@ Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
 
 void Target::create_platform_listeners() {
   m_plugins->create<plugins::TextInput>(m_dispatcher);
+  m_plugins->create<plugins::Decorations>(m_dispatcher, this);
 }
 
 void Target::run() {
@@ -112,7 +114,7 @@ void Target::run() {
   }
 
   m_engine_is_running = true;
-  update_window_metrics(1, 1, 1);
+  update_window_metrics(width(), height(), 1);
 }
 
 // TODO: IMPORTANT handle serial.
@@ -128,7 +130,8 @@ void Target::handle_key_pressed(uint32_t keycode, uint32_t symbol, bool pressed,
   text_input->handle_key_event(keycode, symbol, pressed);
 }
 
-void Target::handle_pointer_motion(double x, double y, size_t timestamp) {
+void Target::handle_pointer_motion(double x, double y, size_t timestamp,
+                                   uint32_t serial) {
   if (!m_engine_is_running)
     return;
 
@@ -138,6 +141,11 @@ void Target::handle_pointer_motion(double x, double y, size_t timestamp) {
   auto phase = FlutterPointerPhase::kHover;
   if (m_last_pointer_phase == FlutterPointerPhase::kDown) {
     phase = FlutterPointerPhase::kMove;
+  }
+
+  if (phase == FlutterPointerPhase::kMove) {
+    auto decorations = m_plugins->get<plugins::Decorations>("decorations");
+    decorations->primary_pressed(serial);
   }
 
   FlutterPointerEvent event = {
@@ -197,7 +205,7 @@ void Target::handle_pointer_leave() {
 
 void Target::handle_pointer_button(double x, double y, bool pressed,
                                    FlutterPointerMouseButtons button,
-                                   size_t timestamp) {
+                                   size_t timestamp, uint32_t serial) {
   if (!m_engine_is_running)
     return;
 
@@ -212,7 +220,6 @@ void Target::handle_pointer_button(double x, double y, bool pressed,
       .buttons = button,
   };
   m_last_pointer_phase = event.phase;
-  m_last_pointer_button = button;
 
   FlutterEngineSendPointerEvent(m_engine, &event, 1);
 }

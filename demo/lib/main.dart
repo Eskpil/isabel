@@ -1,3 +1,4 @@
+import 'package:demo/decorations.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -22,6 +23,7 @@ class MyApp extends StatelessWidget {
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
+
   final String title;
 
   @override
@@ -29,6 +31,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  final Decorations _decorations = Decorations();
+
   int _counter = 0;
   final _formKey = GlobalKey<FormState>();
 
@@ -38,14 +42,26 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  void _move(DragStartDetails details) {
+    _decorations.initiateMove(_decorations.last!);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      backgroundColor: Theme.of(context).colorScheme.background,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            GestureDetector(
+              onPanStart: _move,
+              child: Container(
+                color: Theme.of(context).colorScheme.inversePrimary,
+                width: 720,
+                height: 100,
+              ),
+            ),
             const Text(
               'You have pushed the button this many times:',
             ),
@@ -53,29 +69,28 @@ class _MyHomePageState extends State<MyHomePage> {
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
-
-          Form(
-            key: _formKey,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: <Widget>[
-                  TextFormField(
-                    // The validator receives the text that the user has entered.
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter some text';
-                      }
-                      return null;
-                    },
-                    onFieldSubmitted: (value) {
-                      print("submitted: $value");
-                    },
-                  ),
-                ],
+            Form(
+              key: _formKey,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: <Widget>[
+                    TextFormField(
+                      // The validator receives the text that the user has entered.
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter some text';
+                        }
+                        return null;
+                      },
+                      onFieldSubmitted: (value) {
+                        print("submitted: $value");
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           ],
         ),
       ),
