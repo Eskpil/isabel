@@ -14,13 +14,13 @@ class Decorations {
   static const platform =
       MethodChannel('isabel.io/decorations', JSONMethodCodec());
 
-  SerialEvent? last;
+  SerialEvent? last_move;
 
   Decorations() {
     platform.setMethodCallHandler((call) async {
-      if (call.method == "primary_pressed") {
+      if (call.method == "move") {
         final event = SerialEvent.fromJSON(call.arguments);
-        last = event;
+        last_move = event;
       }
     });
   }

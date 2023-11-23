@@ -24,12 +24,11 @@ void Decorations::handle_message(const FlutterPlatformMessage *message) {
   }
 }
 
-void Decorations::primary_pressed(uint32_t serial) {
+void Decorations::move(uint32_t serial) {
   auto args = std::make_shared<PointerHoldEventArgs>();
 
   args->serial = serial;
 
-  dispatcher()->call(k_channel,
-                     std::make_unique<MethodCall>("primary_pressed", args));
+  dispatcher()->call(k_channel, std::make_unique<MethodCall>("move", args));
 }
 } // namespace shell::plugins

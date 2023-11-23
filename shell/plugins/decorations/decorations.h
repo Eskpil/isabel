@@ -12,7 +12,7 @@ public:
 
   std::string_view name() { return "decorations"; }
 
-  void primary_pressed(uint32_t);
+  void move(uint32_t);
 
 private:
   void handle_message(const FlutterPlatformMessage *);

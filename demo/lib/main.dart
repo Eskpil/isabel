@@ -43,7 +43,11 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _move(DragStartDetails details) {
-    _decorations.initiateMove(_decorations.last!);
+    if (_decorations.last_move == null) {
+      return;
+    }
+
+    _decorations.initiateMove(_decorations.last_move!);
   }
 
   @override
@@ -52,44 +56,49 @@ class _MyHomePageState extends State<MyHomePage> {
       backgroundColor: Theme.of(context).colorScheme.background,
       body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+//          mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             GestureDetector(
               onPanStart: _move,
               child: Container(
                 color: Theme.of(context).colorScheme.inversePrimary,
                 width: 720,
-                height: 100,
+                height: 32,
               ),
             ),
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            Form(
-              key: _formKey,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: <Widget>[
-                    TextFormField(
-                      // The validator receives the text that the user has entered.
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter some text';
-                        }
-                        return null;
-                      },
-                      onFieldSubmitted: (value) {
-                        print("submitted: $value");
-                      },
-                    ),
-                  ],
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'You have pushed the button this many times:',
                 ),
-              ),
+                Text(
+                  '$_counter',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                Form(
+                  key: _formKey,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: <Widget>[
+                        TextFormField(
+                          // The validator receives the text that the user has entered.
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter some text';
+                            }
+                            return null;
+                          },
+                          onFieldSubmitted: (value) {
+                            print("submitted: $value");
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

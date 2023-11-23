@@ -145,7 +145,7 @@ void Target::handle_pointer_motion(double x, double y, size_t timestamp,
 
   if (phase == FlutterPointerPhase::kMove) {
     auto decorations = m_plugins->get<plugins::Decorations>("decorations");
-    decorations->primary_pressed(serial);
+    decorations->move(serial);
   }
 
   FlutterPointerEvent event = {
