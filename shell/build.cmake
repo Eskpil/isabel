@@ -18,6 +18,8 @@ set(SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/shell/plugins/text_input/model.cc"
 
         "${CMAKE_CURRENT_SOURCE_DIR}/shell/plugins/decorations/decorations.cc"
+
+        "${CMAKE_CURRENT_SOURCE_DIR}/shell/plugins/popups/popups.cc"
 )
 
 set(LIBISABEL "isabel")

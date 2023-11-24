@@ -4,6 +4,7 @@
 #include "shell/target.h"
 
 #include "shell/plugins/decorations/decorations.h"
+#include "shell/plugins/popups/popups.h"
 #include "shell/plugins/text_input/text_input.h"
 
 namespace shell {
@@ -105,6 +106,7 @@ Target::Target(std::string_view flutter_assets, std::string_view icudtl_dat) {
 void Target::create_platform_listeners() {
   m_plugins->create<plugins::TextInput>(m_dispatcher);
   m_plugins->create<plugins::Decorations>(m_dispatcher, this);
+  m_plugins->create<plugins::Popups>(m_dispatcher);
 }
 
 void Target::run() {
