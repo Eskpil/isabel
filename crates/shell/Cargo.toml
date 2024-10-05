@@ -1,0 +1,19 @@
+[package]
+name = "shell"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+backend = { path = "../backend" }
+engine = { path = "../engine" }
+linux-event-codes = { path = "../linux-event-codes" }
+wayland-client = { version = "0.31.1" }
+wayland-backend = { version = "0.3.0", features = ["client_system"] }
+smithay-client-toolkit = "0.19.2"
+anyhow = "1.0.86"
+raw-window-handle = "0.6.2"
+calloop = "0.14.0"
+wayland-egl = "0.32.4"
+log = "0.4.22"

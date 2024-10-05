@@ -1,0 +1,25 @@
+[package]
+name = "isabel-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[workspace]
+members = [
+    "crates/bindings",
+    "crates/codec",
+    "crates/backend",
+    "crates/shell",
+    "crates/tasks",
+    "crates/engine",
+    "crates/linux-event-codes",
+    "crates/textmodel",
+]
+
+[dependencies]
+env_logger = "0.11.5"
+shell = { path = "crates/shell" }
+engine = { path = "crates/engine" }
+anyhow = "1.0.86"
+calloop = "0.13.0"
