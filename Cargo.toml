@@ -6,20 +6,27 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = [
-    "crates/bindings",
-    "crates/codec",
-    "crates/backend",
-    "crates/shell",
-    "crates/tasks",
-    "crates/engine",
-    "crates/linux-event-codes",
-    "crates/textmodel",
-]
+members = ["crates/bindings", "crates/linux-event-codes", "demo/isabel"]
 
 [dependencies]
+bindings = { path = "./crates/bindings" }
+linux-event-codes = { path = "./crates/linux-event-codes" }
+
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+cursor-icon = "1.1.0"
 env_logger = "0.11.5"
-shell = { path = "crates/shell" }
-engine = { path = "crates/engine" }
 anyhow = "1.0.86"
-calloop = "0.13.0"
+clap = { version = "4.5.19", features = ["derive"] }
+khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+log = "0.4.22"
+raw-window-handle = "0.6.2"
+wayland-client = { version = "0.31.1" }
+wayland-backend = { version = "0.3.0", features = ["client_system"] }
+smithay-client-toolkit = "0.19.2"
+wayland-egl = "0.32.4"
+bitflags = "2.6.0"
+downcast-rs = "1.2.1"
+xkeysym = "0.2.1"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
