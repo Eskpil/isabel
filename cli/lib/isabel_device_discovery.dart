@@ -9,7 +9,6 @@ import 'package:flutter_tools/src/features.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
 import 'package:flutter_tools/src/custom_devices/custom_devices_config.dart';
 import 'package:flutter_tools/src/base/logger.dart';
-import 'package:flutter_tools/src/base/process.dart';
 import 'package:process/process.dart';
 
 import './isabel_workflow.dart';
@@ -77,7 +76,8 @@ class IsabelDeviceDiscovery extends PollingDeviceDiscovery {
   Future<List<Device>> pollingGetDevices({Duration? timeout}) async {
     List<Device> devices = [];
 
-    devices.add(IsabelDevice('isabel-desktop'));
+    devices.add(IsabelDevice('isabel-desktop',
+        targetArch: "x86-64", logger: logger, processManager: processManager));
 
     return devices;
   }

@@ -29,6 +29,7 @@ import 'package:flutter_tools/src/runner/flutter_command.dart';
 import 'package:path/path.dart';
 
 import 'commands/run.dart';
+import 'commands/build.dart';
 import 'isabel_device_discovery.dart';
 import 'isabel_workflow.dart';
 import 'isabel_app.dart';
@@ -84,6 +85,7 @@ Future<void> main(List<String> args) async {
             SymbolizeCommand(stdio: globals.stdio, fileSystem: globals.fs),
 
             IsabelRunCommand(verboseHelp: verboseHelp),
+            IsabelBuildCommand(verboseHelp: verboseHelp),
           ],
       overrides: <Type, Generator>{
         ApplicationPackageFactory: () => IsabelApplicationPackageFactory(),

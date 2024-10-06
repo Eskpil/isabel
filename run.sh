@@ -10,7 +10,7 @@ fi
 popd
 
 if [ "$1" ]; then
-  cargo r -- --build apps/networksettings/build
+  cargo r -- --build demo/build/isabel
 else
-  target/debug/isabel-rs --build apps/networksettings/build
+  target/debug/isabel-rs --build demo/build/isabel/
 fi

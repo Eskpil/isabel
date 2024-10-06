@@ -198,7 +198,10 @@ impl Instance {
         handle: LoopHandle<'a, T>,
         stream: channel::Channel<stream::Event>,
     ) -> anyhow::Result<()> {
-        let _ = unsafe { FlutterEngineRunInitialized(self.inner) };
+        let result = unsafe { FlutterEngineRunInitialized(self.inner) };
+        if result != bindings::FlutterEngineResult_kSuccess {
+            return Err(super::InstanceError::RunFailed.into());
+        }
 
         let (tx, plugin_messages) = channel::channel();
 

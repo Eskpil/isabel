@@ -54,12 +54,22 @@ class BuildableIsabelApp extends IsabelApp {
 
   @override
   String executable(BuildMode buildMode, String targetArch) {
-    return '';
+    final String binaryName = 'isabel';
+    return globals.fs.path.join(
+      'build/isabel/',
+      targetArch,
+      buildMode.cliName,
+      binaryName,
+    );
   }
 
   @override
   String outputDirectory(BuildMode buildMode, String targetArch) {
-    return '';
+    return globals.fs.path.join(
+      globals.fs.currentDirectory.path,
+      'build/isabel/',
+      'flutter_assets',
+    );
   }
 
   @override

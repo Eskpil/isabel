@@ -7,7 +7,10 @@ use isabel_rs::{Config, EventLoop, Instance, Shell, Window};
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long)]
-    build: String,
+    assets: String,
+
+    #[arg(short, long)]
+    icudtl: String,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -20,8 +23,8 @@ fn main() -> anyhow::Result<()> {
     let mut window = Window::create(tx, "hello", 1240, 540, &mut eloop)?;
 
     let config = Config {
-        assets: format!("{}/flutter_assets", args.build),
-        icu_data: String::from("./icudtl.dat"),
+        assets: args.assets,
+        icu_data: args.icudtl,
     };
     let mut instance = Instance::new(window.backend()?, config)?;
 

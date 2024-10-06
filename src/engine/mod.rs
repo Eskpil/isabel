@@ -9,6 +9,8 @@ use downcast_rs::{impl_downcast, Downcast};
 pub use instance::{Config, Instance};
 pub use stream::{Event, PointerButtons};
 
+use thiserror::Error;
+
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub struct ShellCapabilities: u32 {
@@ -57,3 +59,9 @@ pub trait Plugin: Downcast {
 }
 
 impl_downcast!(Plugin);
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Error)]
+pub enum InstanceError {
+    #[error("Running the flutter engine failed")]
+    RunFailed,
+}
