@@ -68,7 +68,8 @@ class BuildableIsabelApp extends IsabelApp {
     return globals.fs.path.join(
       globals.fs.currentDirectory.path,
       'build/isabel/',
-      'flutter_assets',
+      targetArch,
+      'bundle',
     );
   }
 

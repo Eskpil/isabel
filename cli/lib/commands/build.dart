@@ -1,10 +1,7 @@
-import 'package:flutter_tools/src/android/build_validation.dart' as android;
 import 'package:flutter_tools/src/base/analyze_size.dart';
-import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/base/os.dart';
 import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/commands/build.dart';
-import 'package:flutter_tools/src/commands/build_apk.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/project.dart';
 import 'package:flutter_tools/src/runner/flutter_command.dart';

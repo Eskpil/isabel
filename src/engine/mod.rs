@@ -2,6 +2,8 @@ mod builtin;
 mod instance;
 mod stream;
 
+use std::error;
+
 pub use cursor_icon::CursorIcon;
 
 use bitflags::bitflags;
@@ -64,4 +66,13 @@ impl_downcast!(Plugin);
 pub enum InstanceError {
     #[error("Running the flutter engine failed")]
     RunFailed,
+
+    #[error("Unable to get the engine proc table")]
+    ProcTableFailed,
+
+    #[error("Unable to create aot data")]
+    CreateAotData,
+
+    #[error("Aot elf path was not provided")]
+    MissingAotPath,
 }

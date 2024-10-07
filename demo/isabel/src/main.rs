@@ -11,6 +11,9 @@ struct Args {
 
     #[arg(short, long)]
     icudtl: String,
+
+    #[arg(short, long)]
+    aot: String,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -25,6 +28,7 @@ fn main() -> anyhow::Result<()> {
     let config = Config {
         assets: args.assets,
         icu_data: args.icudtl,
+        aot_elf_path: Some(args.aot),
     };
     let mut instance = Instance::new(window.backend()?, config)?;
 

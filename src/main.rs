@@ -3,25 +3,18 @@ use std::time::Duration;
 
 use isabel_rs::{Config, EventLoop, Instance, Shell, Window};
 
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(short, long)]
-    build: String,
-}
-
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let args = Args::parse();
     let mut eloop = EventLoop::try_new()?;
 
     let (tx, rx) = isabel_rs::channels();
     let mut window = Window::create(tx, "hello", 1240, 540, &mut eloop)?;
 
     let config = Config {
-        assets: format!("{}/flutter_assets", args.build),
+        assets: String::from("/home/linus/repos/github.com/isabel-rs/demo/build/isabel/x86-64/bundle/data/flutter_assets"),
         icu_data: String::from("./icudtl.dat"),
+        aot_elf_path: None,
     };
     let mut instance = Instance::new(window.backend()?, config)?;
 

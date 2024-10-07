@@ -9,6 +9,7 @@ import 'package:flutter_tools/src/device_port_forwarder.dart';
 import 'package:flutter_tools/src/protocol_discovery.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:process/process.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
 
 import './isabel_app.dart';
 import './isabel_builder.dart';
@@ -90,7 +91,9 @@ class IsabelDevice extends Device {
 
     final BuildMode buildMode = debuggingOptions.buildInfo.mode;
     final String executable = package.executable(buildMode, targetArch);
-    final String bundle = package.outputDirectory(buildMode, targetArch);
+    final String dataDir = package.outputDirectory(buildMode, targetArch);
+    final String bundle =
+        globals.fs.path.join(dataDir, 'data', 'flutter_assets');
 
     final String icudtl = package.project.editableDirectory
         .childDirectory('flutter')
@@ -98,17 +101,22 @@ class IsabelDevice extends Device {
         .childFile('icudtl.dat')
         .path;
 
-    final String executableOptions = '--assets $bundle --icudtl $icudtl';
+    final List<String> args = [
+      executable,
+      '--assets=$bundle',
+      '--icudtl=$icudtl'
+    ];
 
-    print(executableOptions);
+    if (buildMode.isPrecompiled) {
+      final String aotLib = globals.fs.path.join(dataDir, 'lib', 'libapp.so');
+      print(aotLib);
+      args.add('--aot=$aotLib');
+    }
+
+    print(args.join(" "));
 
     final Process process = await processManager.start(
-      <String>[
-        executable,
-        '--assets=$bundle',
-        '--icudtl=$icudtl',
-        ...debuggingOptions.dartEntrypointArgs,
-      ],
+      args,
       environment: _computeEnvironment(debuggingOptions, false, route),
     );
 

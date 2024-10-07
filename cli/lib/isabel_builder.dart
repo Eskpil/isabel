@@ -51,8 +51,8 @@ class IsabelBuilder {
     final IsabelProject isabelProject = IsabelProject.fromFlutter(project);
     if (!isabelProject.existsSync()) {
       throwToolExit(
-        'This project is not configured for eLinux.\n'
-        'To fix this problem, create a new project by running `flutter-elinux create <app-dir>`.',
+        'This project is not configured for Isabel.\n'
+        'To fix this problem, create a new project by running `isabel create <app-dir>`.',
       );
     }
 
@@ -63,6 +63,8 @@ class IsabelBuilder {
     // Used by AotElfBase to generate an AOT snapshot.
     final String targetPlatformName = getNameForTargetPlatform(
         _getTargetPlatformForArch(isabelBuildInfo.targetArch));
+
+    print(buildInfo.mode);
 
     final Environment environment = Environment(
       projectDir: project.directory,
@@ -87,7 +89,9 @@ class IsabelBuilder {
       analytics: globals.analytics,
     );
 
-    final Target target = DebugIsabelApplication(isabelBuildInfo);
+    final Target target = buildInfo.mode.isPrecompiled
+        ? ReleaseIsabelApplication(isabelBuildInfo)
+        : DebugIsabelApplication(isabelBuildInfo);
 
     final Status status = globals.logger.startProgress(
         'Building an Isabel application backend in $buildModeName mode for ${isabelBuildInfo.targetArch} target...');

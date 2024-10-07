@@ -5,8 +5,8 @@ use std::{
 
 use crate::backend::Backend;
 use bindings::{
-    FlutterEngineRunInitialized, FlutterEngineSendPlatformMessage, FlutterPointerPhase_kDown,
-    FlutterProjectArgs, FlutterRendererConfig,
+    FlutterEngineResult_kSuccess, FlutterEngineRunInitialized, FlutterEngineSendPlatformMessage,
+    FlutterPointerPhase_kDown, FlutterProjectArgs, FlutterRendererConfig,
 };
 
 use crate::shell::{
@@ -17,7 +17,7 @@ use crate::shell::{
 
 use super::{
     builtin::{self, Decorations, Textinput},
-    stream, CsdMessage, Plugin, PluginMessage, PointerButtons, Shell,
+    stream, CsdMessage, InstanceError, Plugin, PluginMessage, PointerButtons, Shell,
 };
 
 struct Userdata {
@@ -29,6 +29,7 @@ struct Userdata {
 
 pub struct Instance {
     userdata: Box<Userdata>,
+    proc_table: bindings::FlutterEngineProcTable,
 
     inner: bindings::FlutterEngine,
 }
@@ -102,6 +103,7 @@ unsafe extern "C" fn renderer_proc_resolver(
 pub struct Config {
     pub assets: String,
     pub icu_data: String,
+    pub aot_elf_path: Option<String>,
 }
 
 impl Instance {
@@ -133,9 +135,18 @@ impl Instance {
             task_runner: crate::tasks::TaskRunner::new()?,
         };
 
+        let mut proc_table: bindings::FlutterEngineProcTable = unsafe { std::mem::zeroed() };
+        proc_table.struct_size = std::mem::size_of::<bindings::FlutterEngineProcTable>();
+        unsafe {
+            let result = bindings::FlutterEngineGetProcAddresses(&mut proc_table as *mut _);
+            if result != bindings::FlutterEngineResult_kSuccess {
+                return Err(InstanceError::ProcTableFailed.into());
+            }
+        }
         let mut instance = Self {
             userdata: Box::new(userdata),
             inner: std::ptr::null_mut(),
+            proc_table,
         };
 
         instance.with(Box::new(builtin::Textinput::new()));
@@ -159,6 +170,29 @@ impl Instance {
         custom_task_runners.platform_task_runner = &task_runner_description as *const _ as _;
 
         let mut args: bindings::FlutterProjectArgs = unsafe { std::mem::zeroed() };
+
+        if unsafe { instance.proc_table.RunsAOTCompiledDartCode.unwrap()() } {
+            if instance_config.aot_elf_path.is_none() {
+                return Err(InstanceError::MissingAotPath.into());
+            }
+
+            let mut source = unsafe { std::mem::zeroed::<bindings::FlutterEngineAOTDataSource>() };
+            source.type_ =
+                bindings::FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath;
+
+            let aot_path = CString::new(instance_config.aot_elf_path.unwrap())?;
+            source.__bindgen_anon_1.elf_path = aot_path.as_ptr() as *const i8;
+
+            let result = unsafe {
+                instance.proc_table.CreateAOTData.unwrap()(
+                    &source as *const _,
+                    &mut args.aot_data as *mut _,
+                )
+            };
+            if result != FlutterEngineResult_kSuccess {
+                return Err(InstanceError::CreateAotData.into());
+            }
+        }
 
         let assets_path = CString::new(instance_config.assets)?;
         let icu_data_path = CString::new(instance_config.icu_data)?;

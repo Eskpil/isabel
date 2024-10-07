@@ -91,6 +91,54 @@ abstract class IsabelAssetBundle extends Target {
   }
 }
 
+class ReleaseIsabelApplication extends IsabelAssetBundle {
+  ReleaseIsabelApplication(super.buildInfo);
+
+  @override
+  String get name => 'release_elinux_application';
+
+  @override
+  List<Target> get dependencies => <Target>[
+        ...super.dependencies,
+        IsabelAotElf(buildInfo.targetArch == 'arm64'
+            ? TargetPlatform.linux_arm64
+            : TargetPlatform.linux_x64),
+      ];
+}
+
+class IsabelAotElf extends AotElfBase {
+  const IsabelAotElf(this.targetPlatform);
+
+  @override
+  String get name => 'elinux_aot_elf';
+
+  @override
+  List<Source> get inputs => <Source>[
+        const Source.pattern(
+            '{FLUTTER_ROOT}/packages/flutter_tools/lib/src/build_system/targets/common.dart'),
+        const Source.pattern('{BUILD_DIR}/app.dill'),
+        const Source.artifact(Artifact.engineDartBinary),
+        const Source.artifact(Artifact.skyEnginePath),
+        Source.artifact(
+          Artifact.genSnapshot,
+          platform: targetPlatform,
+          mode: BuildMode.release,
+        ),
+      ];
+
+  @override
+  List<Source> get outputs => const <Source>[
+        Source.pattern('{BUILD_DIR}/app.so'),
+      ];
+
+  @override
+  List<Target> get dependencies => const <Target>[
+        KernelSnapshot(),
+      ];
+
+  final TargetPlatform targetPlatform;
+}
+
 /// Source: [DebugAndroidApplication] in `android.dart`
 class DebugIsabelApplication extends IsabelAssetBundle {
   DebugIsabelApplication(super.buildInfo);
@@ -179,15 +227,22 @@ class NativeBundle {
 
       final File icuData = commonDir.childFile('icudtl.dat');
       icuData.copySync(flutterEphemeralDir.childFile(icuData.basename).path);
+
+      if (buildInfo!.buildInfo.mode.isPrecompiled) {
+        final File aotSharedLib = environment.buildDir.childFile('app.so');
+        aotSharedLib.copySync(outputBundleLibDir.childFile('libapp.so').path);
+      }
+    }
+
+    final List<String> cmd = ['cargo', 'build'];
+
+    if (buildInfo!.buildInfo.isRelease) {
+      cmd.add('--release');
     }
 
     // Run the native build.
     RunResult result = await _processUtils.run(
-      <String>[
-        'cargo',
-        'build',
-        buildInfo!.buildInfo.isRelease ? '--release' : '',
-      ],
+      cmd,
       workingDirectory: isabelDir.path,
       environment: <String, String>{
         'CARGO_TARGET_DIR': outputDir.path,
