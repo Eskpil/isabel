@@ -6,7 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["crates/bindings", "crates/linux-event-codes", "demo/isabel"]
+members = [
+    "crates/bindings",
+    "crates/linux-event-codes",
+    "demo/isabel",
+    "apps/networksettings/isabel",
+]
 
 [dependencies]
 bindings = { path = "./crates/bindings" }

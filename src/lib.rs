@@ -5,12 +5,5 @@ pub mod shell;
 pub mod tasks;
 pub mod textmodel;
 
-pub use engine::{Config, Instance, Shell};
-pub use shell::{EventLoop, Window};
-
-pub fn channels() -> (
-    shell::channel::Sender<engine::Event>,
-    shell::channel::Channel<engine::Event>,
-) {
-    shell::channel::channel::<engine::Event>()
-}
+pub use engine::{Bundle, Instance, Shell};
+pub use shell::{app::Application, window::Window, EventLoop};

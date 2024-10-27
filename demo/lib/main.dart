@@ -76,28 +76,13 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Center(
+      backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      body: const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const TextField(
-              decoration: InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Enter text',
-              ),
-            ),
-            GestureDetector(
-              onPanStart: _move,
-              child: Container(
-                color: Theme.of(context).colorScheme.inversePrimary,
-                width: 720,
-                height: 32,
-              ),
-            ),
+            Text('Welcome to the isabel flutter emebdder',
+                style: TextStyle(color: Colors.black))
           ],
         ),
       ),

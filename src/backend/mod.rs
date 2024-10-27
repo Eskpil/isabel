@@ -1,10 +1,14 @@
+// TODO: Support vulkan
+
 extern crate khronos_egl as egl;
 
 use anyhow::Error;
-use egl::{NativeDisplayType, NativeWindowType};
+use egl::NativeDisplayType;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
 pub type SurfaceId = usize;
+
+pub type Surface = (egl::Surface, wayland_egl::WlEglSurface);
 
 #[derive(Debug)]
 #[repr(C)]
@@ -13,7 +17,7 @@ pub struct Backend {
     display: egl::Display,
     config: egl::Config,
     context: egl::Context,
-    surfaces: Vec<egl::Surface>,
+    surfaces: Vec<Surface>,
 }
 
 fn create_context(
@@ -82,9 +86,14 @@ impl Backend {
         self.instance.get_proc_address(procname)
     }
 
-    pub fn surface(&mut self, window_handle: &RawWindowHandle) -> anyhow::Result<usize> {
+    pub fn surface(
+        &mut self,
+        window_handle: &RawWindowHandle,
+        width: usize,
+        height: usize,
+    ) -> anyhow::Result<usize> {
         let window_ptr = match window_handle {
-            RawWindowHandle::Wayland(w) => w.surface.as_ptr() as *mut _ as NativeWindowType,
+            RawWindowHandle::Wayland(w) => w.surface.as_ptr(),
             o => {
                 return Err(Error::msg(format!(
                     "support for {:?} not implemeted yet",
@@ -93,15 +102,35 @@ impl Backend {
             }
         };
 
+        let egl_surface = unsafe {
+            wayland_egl::WlEglSurface::new_from_raw(
+                window_ptr as *mut _,
+                width as i32,
+                height as i32,
+            )
+        }?;
+
+        egl_surface.resize(width as i32, height as i32, 0, 0);
+
         let surface = unsafe {
-            self.instance
-                .create_window_surface(self.display, self.config, window_ptr, None)?
+            self.instance.create_window_surface(
+                self.display,
+                self.config,
+                egl_surface.ptr() as *mut _,
+                None,
+            )?
         };
 
         let id = self.surfaces.len();
-        self.surfaces.insert(id, surface);
+        self.surfaces.insert(id, (surface, egl_surface));
 
         Ok(id)
+    }
+
+    pub fn resize(&mut self, id: usize, width: usize, height: usize, dx: usize, dy: usize) {
+        self.surfaces[id]
+            .1
+            .resize(width as i32, height as i32, dx as i32, dy as i32);
     }
 
     pub fn clear_current(&self) -> anyhow::Result<()> {
@@ -112,7 +141,7 @@ impl Backend {
         let (surface, context) = if id == usize::MAX {
             (None, None)
         } else {
-            (Some(self.surfaces[id]), Some(self.context))
+            (Some(self.surfaces[id].0), Some(self.context))
         };
 
         self.instance
@@ -126,7 +155,7 @@ impl Backend {
             return Ok(());
         }
 
-        let surface = self.surfaces[id];
+        let surface = self.surfaces[id].0;
         self.instance.swap_buffers(self.display, surface)?;
         Ok(())
     }

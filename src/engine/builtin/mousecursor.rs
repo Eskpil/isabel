@@ -1,9 +1,8 @@
-use crate::shell::channel::Sender;
-use anyhow::Error;
+use std::{cell::RefCell, rc::Rc};
+
+use crate::Shell;
 use cursor_icon::CursorIcon;
 use serde::{Deserialize, Serialize};
-
-use crate::engine::{PluginMessage, ShellCapabilities};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -52,29 +51,20 @@ pub enum MouseCursorKind {
     ZoomOut,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Mousecursor {
-    tx: Option<Sender<crate::engine::PluginMessage>>,
+    shell: Option<Rc<RefCell<dyn Shell>>>,
 }
 
 impl Mousecursor {
     pub fn new() -> Self {
-        Self { tx: None }
+        Self { shell: None }
     }
 }
 
 impl crate::engine::Plugin for Mousecursor {
-    fn init(
-        &mut self,
-        tx: Sender<crate::engine::PluginMessage>,
-        shell_capabilities: crate::engine::ShellCapabilities,
-    ) -> anyhow::Result<()> {
-        self.tx = Some(tx);
-
-        if !shell_capabilities.contains(ShellCapabilities::MOUSE_CURSOR) {
-            return Err(Error::msg("shell does not support changing mouse cursor"));
-        }
-
+    fn init(&mut self, shell: Rc<RefCell<dyn Shell>>) -> anyhow::Result<()> {
+        self.shell = Some(shell);
         Ok(())
     }
 
@@ -126,11 +116,11 @@ impl crate::engine::Plugin for Mousecursor {
                     MouseCursorKind::ZoomOut => CursorIcon::ZoomOut,
                 };
 
-                self.tx
-                    .as_mut()
+                self.shell
+                    .clone()
                     .unwrap()
-                    .send(PluginMessage::SetCursor { icon })
-                    .expect("could not send");
+                    .borrow_mut()
+                    .set_cursor_icon(icon)?;
             }
         }
 
