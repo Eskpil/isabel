@@ -30,7 +30,6 @@ wayland-client = { version = "0.31.1" }
 wayland-backend = { version = "0.3.0", features = ["client_system"] }
 smithay-client-toolkit = "0.19.2"
 wayland-egl = "0.32.4"
-bitflags = "2.6.0"
 downcast-rs = "1.2.1"
 xkeysym = "0.2.1"
 serde = { version = "1.0.210", features = ["derive"] }

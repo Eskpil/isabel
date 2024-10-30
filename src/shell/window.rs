@@ -6,7 +6,6 @@ use std::{
     usize,
 };
 
-use cursor_icon::CursorIcon;
 use raw_window_handle::{RawWindowHandle, WaylandWindowHandle};
 use smithay_client_toolkit::{
     reexports::calloop::channel::Sender,
@@ -180,15 +179,6 @@ impl State for Window {
 impl Shell for Window {
     fn backend(&mut self) -> anyhow::Result<Arc<Mutex<Backend>>> {
         Ok(self.backend.clone())
-    }
-
-    fn set_cursor_icon(&mut self, icon: CursorIcon) -> anyhow::Result<()> {
-        self.tx.send(Request::SetCursorIcon { icon })?;
-        Ok(())
-    }
-
-    fn capabilities(&self) -> engine::ShellCapabilities {
-        engine::ShellCapabilities::all()
     }
 
     fn hide(&mut self) -> anyhow::Result<()> {

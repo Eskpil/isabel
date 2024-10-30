@@ -10,7 +10,6 @@ use std::{
 
 pub use cursor_icon::CursorIcon;
 
-use bitflags::bitflags;
 use downcast_rs::{impl_downcast, Downcast};
 pub use instance::Instance;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
@@ -32,20 +31,8 @@ pub struct Bundle {
     pub aot_elf_path: Option<String>,
 }
 
-bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct ShellCapabilities: u32 {
-        const TITLE = 0x001;
-        const POPUP = 0x002;
-        const MOUSE_CURSOR = 0x003;
-        const CLIENT_SIDE_DECORATIONS = 0x004;
-    }
-}
-
 pub trait Shell: Downcast {
     fn backend(&mut self) -> anyhow::Result<Arc<Mutex<Backend>>>;
-    fn set_cursor_icon(&mut self, cursor_icon: cursor_icon::CursorIcon) -> anyhow::Result<()>;
-    fn capabilities(&self) -> ShellCapabilities;
 
     fn hide(&mut self) -> anyhow::Result<()>;
     fn show(&mut self) -> anyhow::Result<()>;

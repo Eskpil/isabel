@@ -92,7 +92,6 @@ pub enum RecreateResponse {
 pub enum Request {
     Recreate { id: usize, req: RecreateRequest },
     Unmap { id: ObjectId },
-    SetCursorIcon { icon: CursorIcon },
 }
 
 pub struct Application<'a> {
@@ -174,9 +173,6 @@ where
                         }
                         Request::Unmap { id } => {
                             a.surface_id_to_id.remove(&id);
-                        }
-                        Request::SetCursorIcon { icon } => {
-                            a.set_cursor_icon(icon).expect("could not set cursor icon");
                         }
                     }
                 }
