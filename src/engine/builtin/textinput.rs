@@ -2,11 +2,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::textmodel::{TextModel, TextRange};
-use crate::Shell;
+use crate::{Application, Shell};
 use serde::{Deserialize, Serialize};
+use smithay_client_toolkit::reexports::calloop::channel::Sender;
 use xkeysym::Keysym;
 
-use crate::engine::Plugin;
+use crate::engine::{EngineRequest, Plugin};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(tag = "name")]
@@ -214,19 +215,16 @@ pub(super) enum TextInputClient {
     RemoveTextPlaceholder(u64),
 }
 
-fn publish<T: Serialize>(channel: String, data: &T, shell: &mut Rc<RefCell<dyn Shell>>) {
-    let payload = serde_json::ser::to_vec(data).expect("could not serialize");
+fn publish<T: Serialize>(channel: String, data: &T, tx: &Sender<EngineRequest>) {
+    let data = serde_json::ser::to_vec(data).expect("could not serialize");
 
-    shell
-        .borrow_mut()
-        .instance_mut()
-        .engine_mut()
-        .publish(channel, payload);
+    tx.send(EngineRequest::Publish { channel, data }).unwrap();
 }
 
 #[derive(Clone)]
 pub struct Textinput {
     shell: Option<Rc<RefCell<dyn Shell>>>,
+    tx: Option<Sender<EngineRequest>>,
 
     active_model: Option<TextModel>,
     active_client_id: Option<u64>,
@@ -238,6 +236,7 @@ impl Textinput {
     pub fn new() -> Self {
         Self {
             shell: None,
+            tx: None,
 
             active_model: None,
             active_client_id: None,
@@ -260,7 +259,7 @@ impl Textinput {
             self.active_input_action.unwrap().clone(),
         );
 
-        publish(self.on().to_owned(), &method, self.shell.as_mut().unwrap());
+        publish(self.on().to_owned(), &method, self.tx.as_ref().unwrap());
     }
 
     pub fn handle_key_event(&mut self, symbol: xkeysym::Keysym, _: bool) {
@@ -328,13 +327,18 @@ impl Textinput {
 
         let cmd =
             TextInputClient::UpdateEditingState(*self.active_client_id.as_ref().unwrap(), args);
-        publish(self.on().to_owned(), &cmd, self.shell.as_mut().unwrap());
+        publish(self.on().to_owned(), &cmd, self.tx.as_ref().unwrap());
     }
 }
 
 impl crate::engine::Plugin for Textinput {
-    fn init(&mut self, shell: Rc<RefCell<dyn Shell>>) -> anyhow::Result<()> {
+    fn init(
+        &mut self,
+        shell: Rc<RefCell<dyn Shell>>,
+        tx: Sender<EngineRequest>,
+    ) -> anyhow::Result<()> {
         self.shell = Some(shell);
+        self.tx = Some(tx);
         Ok(())
     }
 
@@ -342,7 +346,7 @@ impl crate::engine::Plugin for Textinput {
         "flutter/textinput"
     }
 
-    fn handle(&mut self, payload: Vec<u8>) -> anyhow::Result<()> {
+    fn handle(&mut self, _app: &mut Application, payload: Vec<u8>) -> anyhow::Result<()> {
         let textinput: TextInput = serde_json::from_slice(&payload[..])?;
         match textinput {
             TextInput::SetClient(id, client) => {

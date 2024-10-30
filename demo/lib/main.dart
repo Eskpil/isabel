@@ -3,6 +3,36 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+void sidecar_main() {}
+
+class SidecarRequestSpawn {
+  final double x, y;
+  final String entry;
+
+  const SidecarRequestSpawn(
+      {required this.x, required this.y, required this.entry});
+
+  Map<dynamic, dynamic> serialize() {
+    var data = {'x': x, 'y': y, 'entry': entry};
+    return data;
+  }
+}
+
+class Sidecar {
+  static const platform = MethodChannel('isabel/sidecar', JSONMethodCodec());
+
+  Sidecar() {
+    platform.setMethodCallHandler((call) async {
+      print(call);
+    });
+  }
+
+  void spawn(double x, double y, String entry) {
+    final req = SidecarRequestSpawn(entry: entry, x: x, y: y);
+    platform.invokeMethod('Spawn', req.serialize());
+  }
+}
+
 class SerialEvent {
   int serial;
 
@@ -65,6 +95,9 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final Decorations _decorations = Decorations();
+  final Sidecar _sidecar = Sidecar();
+  int count = 0;
+
   void _move(DragStartDetails details) {
     if (_decorations.lastMove == null) {
       return;
@@ -73,16 +106,39 @@ class _MyHomePageState extends State<MyHomePage> {
     _decorations.initiateMove(_decorations.lastMove!);
   }
 
+  void _onPressed(TapDownDetails details) {
+    print(details.globalPosition.dx);
+    print(details.globalPosition.dy);
+    print('');
+
+    _sidecar.spawn(
+        details.globalPosition.dx, details.globalPosition.dy, "sidecar_main");
+  }
+
+  void _onIncrementPressed() {
+    setState(() {
+      count++;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      body: const Center(
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Text('Welcome to the isabel flutter emebdder',
-                style: TextStyle(color: Colors.black))
+            Text('Pressed $count times'),
+            TextButton(
+                onPressed: _onIncrementPressed, child: const Text('Increment')),
+            const Text('Welcome to the isabel flutter emebdder',
+                style: TextStyle(color: Colors.black)),
+            GestureDetector(
+                onTapDown: _onPressed,
+                child: Container(
+                    color: Theme.of(context).colorScheme.primary,
+                    child: const Text('Open popup')))
           ],
         ),
       ),

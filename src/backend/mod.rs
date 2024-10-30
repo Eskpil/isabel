@@ -2,6 +2,8 @@
 
 extern crate khronos_egl as egl;
 
+use std::collections::HashMap;
+
 use anyhow::Error;
 use egl::NativeDisplayType;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -10,6 +12,9 @@ pub type SurfaceId = usize;
 
 pub type Surface = (egl::Surface, wayland_egl::WlEglSurface);
 
+pub const MAIN_SURFACE: usize = 0;
+pub const RESOURCE_SURFACE: usize = 1;
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct Backend {
@@ -17,7 +22,7 @@ pub struct Backend {
     display: egl::Display,
     config: egl::Config,
     context: egl::Context,
-    surfaces: Vec<Surface>,
+    surfaces: HashMap<usize, Surface>,
 }
 
 fn create_context(
@@ -78,8 +83,12 @@ impl Backend {
             display,
             config,
             context,
-            surfaces: Vec::new(),
+            surfaces: HashMap::new(),
         })
+    }
+
+    pub fn has(&self, id: &SurfaceId) -> bool {
+        self.surfaces.contains_key(id)
     }
 
     pub fn get_proc_address(&self, procname: &str) -> Option<extern "system" fn()> {
@@ -121,24 +130,29 @@ impl Backend {
             )?
         };
 
-        let id = self.surfaces.len();
-        self.surfaces.insert(id, (surface, egl_surface));
+        self.surfaces.insert(MAIN_SURFACE, (surface, egl_surface));
 
-        Ok(id)
+        Ok(MAIN_SURFACE)
     }
 
-    pub fn resize(&mut self, id: usize, width: usize, height: usize, dx: usize, dy: usize) {
+    pub fn remove(&mut self, id: &SurfaceId) {
+        self.instance
+            .destroy_surface(self.display, self.surfaces[id].0)
+            .expect("failed to destroy surface");
+    }
+
+    pub fn resize(&mut self, id: &SurfaceId, width: usize, height: usize, dx: usize, dy: usize) {
         self.surfaces[id]
             .1
             .resize(width as i32, height as i32, dx as i32, dy as i32);
     }
 
     pub fn clear_current(&self) -> anyhow::Result<()> {
-        self.make_current(usize::MAX)
+        self.make_current(&usize::MAX)
     }
 
-    pub fn make_current(&self, id: usize) -> anyhow::Result<()> {
-        let (surface, context) = if id == usize::MAX {
+    pub fn make_current(&self, id: &SurfaceId) -> anyhow::Result<()> {
+        let (surface, context) = if *id == usize::MAX {
             (None, None)
         } else {
             (Some(self.surfaces[id].0), Some(self.context))
@@ -150,7 +164,7 @@ impl Backend {
         Ok(())
     }
 
-    pub fn swap_buffers(&self, id: usize) -> anyhow::Result<()> {
+    pub fn swap_buffers(&self, id: &SurfaceId) -> anyhow::Result<()> {
         if self.instance.get_current_context() != Some(self.context) {
             return Ok(());
         }

@@ -5,10 +5,10 @@ use raw_window_handle::{
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry,
-    delegate_seat, delegate_xdg_shell, delegate_xdg_window,
+    delegate_seat, delegate_xdg_popup, delegate_xdg_shell, delegate_xdg_window,
     output::{OutputHandler, OutputState},
     reexports::{
-        calloop::{EventLoop, LoopHandle},
+        calloop::LoopHandle,
         calloop_wayland_source::WaylandSource,
         client::{
             protocol::{wl_keyboard, wl_pointer},
@@ -26,6 +26,7 @@ use smithay_client_toolkit::{
     },
     shell::{
         xdg::{
+            popup::{Popup as ToolkitPopup, PopupHandler},
             window::{Window as XdgWindow, WindowConfigure, WindowDecorations, WindowHandler},
             XdgShell,
         },
@@ -41,7 +42,7 @@ use wayland_client::{
     },
     Proxy, QueueHandle,
 };
-use xkeysym::{key::XF86_Close, Keysym};
+use xkeysym::Keysym;
 
 use std::{
     cell::RefCell,
@@ -66,10 +67,12 @@ pub enum KeyState {
 }
 
 pub trait State {
-    fn id(&self) -> ObjectId;
+    fn id(&self) -> usize;
     fn surface(&self) -> &WlSurface;
     fn resize(&mut self, width: usize, height: usize, dx: usize, dy: usize);
     fn exit(&mut self);
+
+    fn map(&mut self, _response: RecreateResponse) {}
 
     fn key_event(&mut self, event: &KeyEvent, state: KeyState);
     fn pointer_enter(&mut self, x: f64, y: f64);
@@ -78,39 +81,53 @@ pub trait State {
     fn pointer_button(&mut self, x: f64, y: f64, time: u32, button: PointerButtons, pressed: bool);
 }
 
+pub enum RecreateRequest {
+    Window,
+}
+
+pub enum RecreateResponse {
+    Window(XdgWindow),
+}
+
 pub enum Request {
-    Close { id: ObjectId },
+    Recreate { id: usize, req: RecreateRequest },
+    Unmap { id: ObjectId },
     SetCursorIcon { icon: CursorIcon },
 }
 
-pub struct Application {
-    registry_state: RegistryState,
-    seat_state: SeatState,
-    output_state: OutputState,
-    compositor_state: CompositorState,
-    cursor_shape_manager: CursorShapeManager,
+pub struct Application<'a> {
+    pub(crate) registry_state: RegistryState,
+    pub(crate) seat_state: SeatState,
+    pub(crate) output_state: OutputState,
+    pub(crate) compositor_state: CompositorState,
+    pub(crate) cursor_shape_manager: CursorShapeManager,
 
-    loop_handle: LoopHandle<'static, Self>,
-    qh: QueueHandle<Self>,
+    pub(crate) loop_handle: LoopHandle<'a, Self>,
+    pub(crate) qh: QueueHandle<Self>,
 
-    keyboard: Option<wl_keyboard::WlKeyboard>,
-    pointer: Option<wl_pointer::WlPointer>,
+    pub(crate) keyboard: Option<wl_keyboard::WlKeyboard>,
+    pub(crate) pointer: Option<wl_pointer::WlPointer>,
 
-    xdg_shell: XdgShell,
+    pub(crate) xdg_shell: XdgShell,
 
-    dph: WaylandDisplayHandle,
+    pub(crate) dph: WaylandDisplayHandle,
+    pub(crate) tx: Sender<Request>,
 
-    tx: Sender<Request>,
+    pub(crate) active_keyboard: Option<ObjectId>,
 
-    active_keyboard: Option<ObjectId>,
+    pub(crate) last_enter_serial: u32,
 
-    last_enter_serial: u32,
+    counter: usize,
 
-    states: HashMap<ObjectId, Rc<RefCell<dyn State>>>,
+    pub(crate) states: HashMap<usize, Rc<RefCell<dyn State>>>,
+    pub(crate) surface_id_to_id: HashMap<ObjectId, usize>,
 }
 
-impl Application {
-    pub fn new(event_loop: &mut EventLoop<'static, Self>) -> anyhow::Result<Self> {
+impl<'a> Application<'a>
+where
+    'a: 'static,
+{
+    pub fn new(handle: LoopHandle<'a, Self>) -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env().unwrap();
         let ptr = NonNull::new(conn.backend().display_ptr() as *mut std::ffi::c_void).unwrap();
         let dph = WaylandDisplayHandle::new(ptr);
@@ -119,34 +136,55 @@ impl Application {
         let (globals, event_queue) = registry_queue_init(&conn).unwrap();
         let qh = event_queue.handle();
 
-        let loop_handle = event_loop.handle();
-        WaylandSource::new(conn.clone(), event_queue)
-            .insert(loop_handle.clone())
-            .unwrap();
+        let source = WaylandSource::new(conn.clone(), event_queue);
+        handle
+            .clone()
+            .insert_source(source, |_, queue, data| queue.dispatch_pending(data))
+            .expect("could not insert");
 
         let (tx, rx) = channel();
 
-        loop_handle
+        handle
             .insert_source(rx, |e, _, a| {
                 if let Event::Msg(req) = e {
                     match req {
-                        Request::Close { id } => {
-                            a.states.remove(&id);
+                        Request::Recreate { id, req } => {
+                            let surface = a.compositor_state.create_surface(&a.qh);
+                            let surface_id = surface.id();
+
+                            let response = match req {
+                                RecreateRequest::Window => {
+                                    let xdg_window = a.xdg_shell.create_window(
+                                        surface,
+                                        WindowDecorations::None,
+                                        &a.qh,
+                                    );
+
+                                    xdg_window.set_min_size(Some((256, 256)));
+                                    xdg_window.commit();
+
+                                    RecreateResponse::Window(xdg_window)
+                                }
+                            };
+
+                            a.surface_id_to_id.insert(surface_id.clone(), id);
+                            let state = a.state_mut(&surface_id);
+                            let mut state = state.borrow_mut();
+                            state.map(response);
+                        }
+                        Request::Unmap { id } => {
+                            a.surface_id_to_id.remove(&id);
                         }
                         Request::SetCursorIcon { icon } => {
-                            let shape_device = a
-                                .cursor_shape_manager
-                                .get_shape_device(&a.pointer.as_ref().unwrap(), &a.qh);
-                            shape_device
-                                .set_shape(a.last_enter_serial, util::cursor_icon_to_shape(icon));
+                            a.set_cursor_icon(icon).expect("could not set cursor icon");
                         }
                     }
                 }
             })
-            .expect("could not insert channel");
+            .unwrap();
 
         Ok(Self {
-            loop_handle,
+            loop_handle: handle,
 
             active_keyboard: None,
 
@@ -164,32 +202,50 @@ impl Application {
             xdg_shell: XdgShell::bind(&globals, &qh)?,
 
             qh,
-            tx,
             dph,
+            tx,
+
+            counter: 0,
 
             states: HashMap::new(),
+            surface_id_to_id: HashMap::new(),
         })
+    }
+
+    pub fn state_mut(&mut self, id: &ObjectId) -> Rc<RefCell<dyn State>> {
+        let id = self.surface_id_to_id[id];
+        self.states[&id].clone()
+    }
+
+    pub fn has_state(&mut self, id: &ObjectId) -> bool {
+        self.surface_id_to_id.contains_key(id)
     }
 
     pub fn exited(&self) -> bool {
         self.states.is_empty()
     }
 
+    pub fn set_cursor_icon(&self, icon: CursorIcon) -> anyhow::Result<()> {
+        let shape_device = self
+            .cursor_shape_manager
+            .get_shape_device(&self.pointer.as_ref().unwrap(), &self.qh);
+
+        shape_device.set_shape(self.last_enter_serial, util::cursor_icon_to_shape(icon));
+        Ok(())
+    }
+
     pub fn create_window(
         &mut self,
-        title: &str,
         width: usize,
         height: usize,
     ) -> anyhow::Result<Rc<RefCell<Window>>> {
         let surface = self.compositor_state.create_surface(&self.qh);
-        let id = surface.id();
+        let surface_id = surface.id();
         let xdg_window = self
             .xdg_shell
             .create_window(surface, WindowDecorations::None, &self.qh);
 
-        xdg_window.set_title(title);
-        xdg_window.set_app_id("io.isabel.example");
-        xdg_window.set_min_size(Some((256, 256)));
+        xdg_window.set_min_size(Some((width as u32, height as u32)));
         xdg_window.commit();
 
         let mut backend = Backend::new(&RawDisplayHandle::Wayland(self.dph))?;
@@ -201,16 +257,24 @@ impl Application {
             _ = backend.surface(&RawWindowHandle::Wayland(handle), width, height)?;
         };
 
-        let window = Window::new(self.tx.clone(), Arc::new(Mutex::new(backend)), xdg_window);
+        let tx = self.tx.clone();
+        let id = self.counter.clone();
+
+        let window = Window::new(id, tx, Arc::new(Mutex::new(backend)), xdg_window);
         let window = Rc::new(RefCell::new(window));
 
         self.states.insert(id, window.clone());
+        self.surface_id_to_id.insert(surface_id, id);
+        self.counter += 1;
 
         Ok(window)
     }
 }
 
-impl CompositorHandler for Application {
+impl<'a> CompositorHandler for Application<'a>
+where
+    'a: 'static,
+{
     fn scale_factor_changed(
         &mut self,
         _conn: &Connection,
@@ -261,7 +325,10 @@ impl CompositorHandler for Application {
     }
 }
 
-impl OutputHandler for Application {
+impl<'a> OutputHandler for Application<'a>
+where
+    'a: 'static,
+{
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.output_state
     }
@@ -291,17 +358,24 @@ impl OutputHandler for Application {
     }
 }
 
-impl WindowHandler for Application {
+impl<'a> WindowHandler for Application<'a>
+where
+    'a: 'static,
+{
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &XdgWindow) {
-        {
-            let mut state = self
-                .states
-                .get_mut(&window.wl_surface().id())
-                .expect("no state for surface")
-                .borrow_mut();
-            state.exit();
+        if !self.has_state(&window.wl_surface().id()) {
+            return;
         }
-        self.states.remove(&window.wl_surface().id());
+
+        let id = {
+            let state = self.state_mut(&window.wl_surface().id());
+            let mut state = state.borrow_mut();
+            state.exit();
+            state.id()
+        };
+
+        self.surface_id_to_id.remove(&window.wl_surface().id());
+        self.states.remove(&id);
     }
 
     fn configure(
@@ -312,11 +386,12 @@ impl WindowHandler for Application {
         configure: WindowConfigure,
         _serial: u32,
     ) {
-        let mut state = self
-            .states
-            .get_mut(&window.wl_surface().id())
-            .expect("no state for surface")
-            .borrow_mut();
+        if !self.has_state(&window.wl_surface().id()) {
+            return;
+        }
+
+        let state = self.state_mut(&window.wl_surface().id());
+        let mut state = state.borrow_mut();
 
         let width = configure.new_size.0.map(|v| v.get()).unwrap_or(256);
         let height = configure.new_size.1.map(|v| v.get()).unwrap_or(256);
@@ -346,7 +421,10 @@ impl WindowHandler for Application {
     }
 }
 
-impl SeatHandler for Application {
+impl<'a> SeatHandler for Application<'a>
+where
+    'a: 'static,
+{
     fn seat_state(&mut self) -> &mut SeatState {
         &mut self.seat_state
     }
@@ -370,8 +448,12 @@ impl SeatHandler for Application {
                     self.loop_handle.clone(),
                     Box::new(move |app, _, event| match app.active_keyboard.clone() {
                         Some(id) => {
-                            let state = app.states.get_mut(&id).expect("no state for surface");
-                            state.borrow_mut().key_event(&event, KeyState::Pressed);
+                            if !app.has_state(&id) {
+                                return;
+                            }
+                            let state = app.state_mut(&id);
+                            let mut state = state.borrow_mut();
+                            state.key_event(&event, KeyState::Pressed);
                         }
                         None => {}
                     }),
@@ -403,7 +485,10 @@ impl SeatHandler for Application {
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 
-impl KeyboardHandler for Application {
+impl<'a> KeyboardHandler for Application<'a>
+where
+    'a: 'static,
+{
     fn enter(
         &mut self,
         _: &Connection,
@@ -438,8 +523,13 @@ impl KeyboardHandler for Application {
     ) {
         match self.active_keyboard.clone() {
             Some(id) => {
-                let state = self.states.get_mut(&id).expect("no state for surface");
-                state.borrow_mut().key_event(&event, KeyState::Pressed);
+                if !self.has_state(&id) {
+                    return;
+                }
+
+                let state = self.state_mut(&id);
+                let mut state = state.borrow_mut();
+                state.key_event(&event, KeyState::Pressed);
             }
             None => {}
         };
@@ -467,7 +557,10 @@ impl KeyboardHandler for Application {
     }
 }
 
-impl PointerHandler for Application {
+impl<'a> PointerHandler for Application<'a>
+where
+    'a: 'static,
+{
     fn pointer_frame(
         &mut self,
         _conn: &Connection,
@@ -486,30 +579,24 @@ impl PointerHandler for Application {
 
         use PointerEventKind::*;
         for event in events {
-            let state = self
-                .states
-                .get_mut(&event.surface.id())
-                .expect("no state for surface");
+            if !self.has_state(&event.surface.id()) {
+                continue;
+            }
+
+            let state = self.state_mut(&event.surface.id());
+            let mut state = state.borrow_mut();
 
             match &event.kind {
                 Enter { serial } => {
                     self.last_enter_serial = *serial;
-                    state
-                        .borrow_mut()
-                        .pointer_enter(event.position.0, event.position.0);
+                    state.pointer_enter(event.position.0, event.position.0);
                 }
-                Leave { .. } => state.borrow_mut().pointer_leave(),
-                Motion { time } => state.borrow_mut().pointer_motion(
-                    event.position.0,
-                    event.position.1,
-                    *time as usize,
-                ),
-                Press {
-                    time,
-                    button,
-                    serial,
-                } => {
-                    state.borrow_mut().pointer_button(
+                Leave { .. } => state.pointer_leave(),
+                Motion { time } => {
+                    state.pointer_motion(event.position.0, event.position.1, *time as usize)
+                }
+                Press { time, button, .. } => {
+                    state.pointer_button(
                         event.position.0,
                         event.position.1,
                         *time,
@@ -517,11 +604,7 @@ impl PointerHandler for Application {
                         true,
                     );
                 }
-                Release {
-                    time,
-                    button,
-                    serial,
-                } => state.borrow_mut().pointer_button(
+                Release { time, button, .. } => state.pointer_button(
                     event.position.0,
                     event.position.1,
                     *time,
@@ -535,19 +618,39 @@ impl PointerHandler for Application {
     }
 }
 
-delegate_compositor!(Application);
-delegate_output!(Application);
+impl<'a> PopupHandler for Application<'a> {
+    fn done(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _popup: &ToolkitPopup) {
+        println!("popup done");
+    }
 
-delegate_seat!(Application);
-delegate_keyboard!(Application);
-delegate_pointer!(Application);
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _popup: &ToolkitPopup,
+        _config: smithay_client_toolkit::shell::xdg::popup::PopupConfigure,
+    ) {
+        println!("got popup configure");
+    }
+}
 
-delegate_xdg_shell!(Application);
-delegate_xdg_window!(Application);
+delegate_compositor!(@<'a: 'static> Application<'a>);
+delegate_output!(@<'a: 'static>Application<'a>);
 
-delegate_registry!(Application);
+delegate_seat!(@<'a: 'static>Application<'a>);
+delegate_keyboard!(@<'a: 'static>Application<'a>);
+delegate_pointer!(@<'a: 'static>Application<'a>);
 
-impl ProvidesRegistryState for Application {
+delegate_xdg_shell!(@<'a: 'static>Application<'a>);
+delegate_xdg_window!(@<'a: 'static>Application<'a>);
+
+delegate_registry!(@<'a: 'static>Application<'a>);
+delegate_xdg_popup!(@<'a: 'static>Application<'a>);
+
+impl<'a> ProvidesRegistryState for Application<'a>
+where
+    'a: 'static,
+{
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry_state
     }

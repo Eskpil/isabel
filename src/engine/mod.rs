@@ -13,6 +13,7 @@ pub use cursor_icon::CursorIcon;
 use bitflags::bitflags;
 use downcast_rs::{impl_downcast, Downcast};
 pub use instance::Instance;
+use smithay_client_toolkit::reexports::calloop::channel::Sender;
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug)]
@@ -23,7 +24,7 @@ pub enum PointerButtons {
     Back,
 }
 
-use crate::backend::Backend;
+use crate::{backend::Backend, Application};
 
 pub struct Bundle {
     pub assets: String,
@@ -46,17 +47,26 @@ pub trait Shell: Downcast {
     fn set_cursor_icon(&mut self, cursor_icon: cursor_icon::CursorIcon) -> anyhow::Result<()>;
     fn capabilities(&self) -> ShellCapabilities;
 
-    fn set_instance(&mut self, instance: Instance);
-    fn instance_mut(&mut self) -> &mut Instance;
+    fn hide(&mut self) -> anyhow::Result<()>;
+    fn show(&mut self) -> anyhow::Result<()>;
+
+    fn set_instance(&mut self, instance: Rc<RefCell<Instance>>);
+    fn instance(&mut self) -> Rc<RefCell<Instance>>;
 }
 
 impl_downcast!(Shell);
 
 pub trait Plugin: Downcast {
-    fn init(&mut self, shell: Rc<RefCell<dyn Shell>>) -> anyhow::Result<()>;
+    fn init(
+        &mut self,
+        shell: Rc<RefCell<dyn Shell>>,
+        tx: Sender<EngineRequest>,
+    ) -> anyhow::Result<()>;
     fn on(&self) -> &str;
 
-    fn handle(&mut self, payload: Vec<u8>) -> anyhow::Result<()>;
+    fn handle(&mut self, _app: &mut Application<'static>, _data: Vec<u8>) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl_downcast!(Plugin);
@@ -65,4 +75,9 @@ impl_downcast!(Plugin);
 pub enum InstanceError {
     #[error("Aot elf path was not provided")]
     MissingAotPath,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EngineRequest {
+    Publish { channel: String, data: Vec<u8> },
 }

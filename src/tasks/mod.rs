@@ -34,31 +34,30 @@ fn duration_until_target(target_nanos: u64) -> Duration {
 }
 
 impl TaskRunner {
-    pub fn new<'a>(handle: LoopHandle<'a, Application>) -> Self {
+    pub fn new<'a>(handle: &LoopHandle<'a, Application<'static>>) -> Self {
         let (tx, rx) = channel();
 
         let mut engine = std::ptr::null_mut();
         let handle2 = handle.clone();
         handle
-            .insert_source(rx, move |e: Event<Msg>, _, _| {
-                if let Event::Msg(msg) = e {
-                    match msg {
-                        Msg::Engine(e) => engine = e,
-                        Msg::Task(t) => {
-                            if engine.is_null() {
-                                return;
-                            }
-
-                            handle2
-                                .clone()
-                                .insert_source(Timer::from_duration(t.0), move |_, _, _| {
-                                    unsafe { FlutterEngineRunTask(engine, &t.1) };
-                                    TimeoutAction::Drop
-                                })
-                                .unwrap();
+            .insert_source(rx, move |e: Event<Msg>, _, _| match e {
+                Event::Msg(msg) => match msg {
+                    Msg::Engine(e) => engine = e,
+                    Msg::Task(t) => {
+                        if engine.is_null() {
+                            return;
                         }
+
+                        handle2
+                            .clone()
+                            .insert_source(Timer::from_duration(t.0), move |_, _, _| {
+                                unsafe { FlutterEngineRunTask(engine, &t.1) };
+                                TimeoutAction::Drop
+                            })
+                            .unwrap();
                     }
-                }
+                },
+                Event::Closed => println!("task runner channel closed"),
             })
             .unwrap();
 
@@ -84,9 +83,14 @@ impl TaskRunner {
         data: *mut std::ffi::c_void,
     ) {
         let runner = unsafe { &*(data as *const Self) as &Self };
-        runner
+        match runner
             .tx
             .send(Msg::Task((duration_until_target(target_time), task)))
-            .unwrap();
+        {
+            Ok(_) => {}
+            Err(e) => {
+                println!("{:?}", e.to_string());
+            }
+        }
     }
 }

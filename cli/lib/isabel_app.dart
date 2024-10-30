@@ -54,7 +54,7 @@ class BuildableIsabelApp extends IsabelApp {
 
   @override
   String executable(BuildMode buildMode, String targetArch) {
-    final String binaryName = 'isabel';
+    final String binaryName = name;
     return globals.fs.path.join(
       'build/isabel/',
       targetArch,

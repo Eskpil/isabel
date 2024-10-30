@@ -77,8 +77,6 @@ class IsabelDevice extends Device {
     bool ipv6 = false,
     String? userIdentifier,
   }) async {
-    print('startApp');
-
     await buildForDevice(
       package,
       buildInfo: debuggingOptions!.buildInfo,
@@ -109,7 +107,6 @@ class IsabelDevice extends Device {
 
     if (buildMode.isPrecompiled) {
       final String aotLib = globals.fs.path.join(dataDir, 'lib', 'libapp.so');
-      print(aotLib);
       args.add('--aot=$aotLib');
     }
 
@@ -137,6 +134,7 @@ class IsabelDevice extends Device {
     );
     try {
       final Uri? observatoryUri = await observatoryDiscovery.uri;
+      print(observatoryUri);
       if (observatoryUri != null) {
         return LaunchResult.succeeded(observatoryUri: observatoryUri);
       }

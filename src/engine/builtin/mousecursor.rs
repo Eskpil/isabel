@@ -1,8 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::Shell;
+use crate::{engine::EngineRequest, Application, Shell};
 use cursor_icon::CursorIcon;
 use serde::{Deserialize, Serialize};
+use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -63,7 +64,11 @@ impl Mousecursor {
 }
 
 impl crate::engine::Plugin for Mousecursor {
-    fn init(&mut self, shell: Rc<RefCell<dyn Shell>>) -> anyhow::Result<()> {
+    fn init(
+        &mut self,
+        shell: Rc<RefCell<dyn Shell>>,
+        _tx: Sender<EngineRequest>,
+    ) -> anyhow::Result<()> {
         self.shell = Some(shell);
         Ok(())
     }
@@ -72,8 +77,8 @@ impl crate::engine::Plugin for Mousecursor {
         "flutter/mousecursor"
     }
 
-    fn handle(&mut self, payload: Vec<u8>) -> anyhow::Result<()> {
-        let message: MouseCursor = crate::codec::from_slice(&payload[..])?;
+    fn handle(&mut self, app: &mut Application<'static>, data: Vec<u8>) -> anyhow::Result<()> {
+        let message: MouseCursor = crate::codec::from_slice(&data[..])?;
 
         match message {
             MouseCursor::ActivateSystemCursor { kind, .. } => {
@@ -116,11 +121,7 @@ impl crate::engine::Plugin for Mousecursor {
                     MouseCursorKind::ZoomOut => CursorIcon::ZoomOut,
                 };
 
-                self.shell
-                    .clone()
-                    .unwrap()
-                    .borrow_mut()
-                    .set_cursor_icon(icon)?;
+                app.set_cursor_icon(icon)?;
             }
         }
 

@@ -1,15 +1,20 @@
 use std::{
-    cell::RefCell,
     ffi::{CStr, CString},
-    rc::Rc,
     sync::{Arc, Mutex},
 };
 
+use smithay_client_toolkit::reexports::calloop::{
+    channel::{channel, Channel, ChannelError, Event, Sender},
+    EventSource,
+};
 use thiserror::Error;
 
-use crate::{backend::Backend, engine::builtin::Textinput, tasks::TaskRunner};
+use crate::{
+    backend::{Backend, MAIN_SURFACE},
+    tasks::TaskRunner,
+};
 
-use super::{Plugin, PointerButtons};
+use super::PointerButtons;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Error)]
 pub enum EngineError {
@@ -32,9 +37,13 @@ pub enum EngineError {
     ShutdownFailed,
 }
 
+pub enum EngineEvent {
+    PlatformMessage { channel: String, data: Vec<u8> },
+}
+
 struct Userdata {
     backend: Arc<Mutex<Backend>>,
-    plugins: Vec<Box<dyn super::Plugin>>,
+    tx: Sender<EngineEvent>,
 }
 
 pub struct Engine {
@@ -52,22 +61,40 @@ pub struct Engine {
     last_phase: bindings::FlutterPointerPhase,
 }
 
+pub struct EngineSource {
+    channel: Channel<EngineEvent>,
+}
+
 unsafe extern "C" fn renderer_clear_current(data: *mut std::ffi::c_void) -> bool {
     let userdata: &mut Userdata = unsafe { &mut *(data as *mut Userdata) };
     let backend = userdata.backend.lock().unwrap();
-    backend.clear_current().is_ok()
+    if backend.has(&MAIN_SURFACE) {
+        backend.clear_current().is_ok()
+    } else {
+        // Trick the flutter engine into thinking everything is ok with rendereing. Although it is not clearing any surfaces.
+        // This is part of how we are able to hide the surface its drawing to but still keep the instance running.
+        true
+    }
 }
 
 unsafe extern "C" fn renderer_make_current(data: *mut std::ffi::c_void) -> bool {
     let userdata: &mut Userdata = unsafe { &mut *(data as *mut Userdata) };
     let backend = userdata.backend.lock().unwrap();
-    backend.make_current(0).is_ok()
+    if backend.has(&MAIN_SURFACE) {
+        backend.make_current(&MAIN_SURFACE).is_ok()
+    } else {
+        true
+    }
 }
 
 unsafe extern "C" fn renderer_present(data: *mut std::ffi::c_void) -> bool {
     let userdata: &mut Userdata = unsafe { &mut *(data as *mut Userdata) };
     let backend = userdata.backend.lock().unwrap();
-    backend.swap_buffers(0).is_ok()
+    if backend.has(&MAIN_SURFACE) {
+        backend.swap_buffers(&MAIN_SURFACE).is_ok()
+    } else {
+        true
+    }
 }
 
 unsafe extern "C" fn renderer_fbo_callback(_data: *mut std::ffi::c_void) -> u32 {
@@ -84,9 +111,10 @@ unsafe extern "C" fn platform_message_callback(
     let channel = unsafe { CStr::from_ptr(message.channel) }
         .to_str()
         .to_owned()
-        .unwrap();
+        .unwrap()
+        .to_owned();
 
-    let payload = {
+    let data = {
         Vec::from_raw_parts(
             message.message as _,
             message.message_size,
@@ -94,20 +122,10 @@ unsafe extern "C" fn platform_message_callback(
         )
     };
 
-    for plugin in &mut userdata.plugins {
-        if plugin.on() == channel {
-            match plugin.handle(payload.clone()) {
-                Ok(_) => {}
-                Err(e) => {
-                    log::error!(
-                        "plugin for: {} failed to handle message because: {}",
-                        channel,
-                        e.to_string()
-                    );
-                }
-            }
-        }
-    }
+    userdata
+        .tx
+        .send(EngineEvent::PlatformMessage { channel, data })
+        .expect("could not publish engine event");
 }
 
 unsafe extern "C" fn renderer_proc_resolver(
@@ -129,7 +147,7 @@ impl Engine {
         backend: Arc<Mutex<Backend>>,
         assets_path: String,
         icu_data_path: String,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<(Self, EngineSource)> {
         let mut proc_table: bindings::FlutterEngineProcTable = unsafe { std::mem::zeroed() };
         proc_table.struct_size = std::mem::size_of::<bindings::FlutterEngineProcTable>();
         unsafe {
@@ -139,29 +157,31 @@ impl Engine {
             }
         }
 
-        let userdata = Box::new(Userdata {
-            backend,
-            plugins: vec![],
-        });
+        let (tx, rx) = channel();
+
+        let userdata = Box::new(Userdata { backend, tx });
 
         let mut args: bindings::FlutterProjectArgs = unsafe { std::mem::zeroed() };
 
         args.struct_size = std::mem::size_of::<bindings::FlutterProjectArgs>();
         args.platform_message_callback = Some(platform_message_callback);
 
-        Ok(Self {
-            userdata,
-            proc_table,
-            args,
+        Ok((
+            Self {
+                userdata,
+                proc_table,
+                args,
 
-            platform_task_runner: None,
+                platform_task_runner: None,
 
-            assets_path,
-            icu_data_path,
+                assets_path,
+                icu_data_path,
 
-            inner: std::ptr::null_mut(),
-            last_phase: 0,
-        })
+                inner: std::ptr::null_mut(),
+                last_phase: 0,
+            },
+            EngineSource { channel: rx },
+        ))
     }
 
     pub fn exit(&mut self) -> anyhow::Result<()> {
@@ -175,25 +195,6 @@ impl Engine {
 
     pub fn inner(&self) -> bindings::FlutterEngine {
         self.inner
-    }
-
-    pub fn extend_with(&mut self, plugin: Box<dyn Plugin>) {
-        for other in &self.userdata.plugins {
-            if plugin.on() == other.on() {
-                log::error!("plugin for: {} is already installed", plugin.on());
-                todo!("do something more gracefull here");
-            }
-        }
-
-        self.userdata.plugins.push(plugin);
-    }
-
-    pub fn preload_plugins(&mut self, shell: Rc<RefCell<dyn super::Shell>>) -> anyhow::Result<()> {
-        for plugin in &mut self.userdata.plugins {
-            plugin.init(shell.clone())?;
-        }
-
-        Ok(())
     }
 
     pub fn publish(&mut self, channel: String, payload: Vec<u8>) {
@@ -476,17 +477,57 @@ impl Engine {
 
         Ok(())
     }
+}
 
-    pub fn key_press(&mut self, symbol: xkeysym::Keysym) -> anyhow::Result<()> {
-        let plugin = self
-            .userdata
-            .plugins
-            .iter_mut()
-            .find(|p| p.on() == "flutter/textinput")
-            .unwrap();
-        let textinput = plugin.downcast_mut::<Textinput>().unwrap();
-        textinput.handle_key_event(symbol, true);
+impl EventSource for EngineSource {
+    type Event = EngineEvent;
+    type Metadata = ();
+    type Ret = ();
+    type Error = ChannelError;
 
-        Ok(())
+    fn register(
+        &mut self,
+        poll: &mut smithay_client_toolkit::reexports::calloop::Poll,
+        token_factory: &mut smithay_client_toolkit::reexports::calloop::TokenFactory,
+    ) -> smithay_client_toolkit::reexports::calloop::Result<()> {
+        self.channel.register(poll, token_factory)
+    }
+
+    fn reregister(
+        &mut self,
+        poll: &mut smithay_client_toolkit::reexports::calloop::Poll,
+        token_factory: &mut smithay_client_toolkit::reexports::calloop::TokenFactory,
+    ) -> smithay_client_toolkit::reexports::calloop::Result<()> {
+        self.channel.register(poll, token_factory)
+    }
+
+    fn unregister(
+        &mut self,
+        poll: &mut smithay_client_toolkit::reexports::calloop::Poll,
+    ) -> smithay_client_toolkit::reexports::calloop::Result<()> {
+        self.channel.unregister(poll)
+    }
+
+    fn process_events<F>(
+        &mut self,
+        readiness: smithay_client_toolkit::reexports::calloop::Readiness,
+        token: smithay_client_toolkit::reexports::calloop::Token,
+        mut callback: F,
+    ) -> Result<smithay_client_toolkit::reexports::calloop::PostAction, Self::Error>
+    where
+        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
+    {
+        let action = self
+            .channel
+            .process_events(readiness, token, |e, &mut ()| match e {
+                Event::Msg(m) => {
+                    callback(m, &mut ());
+                }
+                Event::Closed => {
+                    // TODO: Handle this
+                }
+            })?;
+
+        Ok(action)
     }
 }
