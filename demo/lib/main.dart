@@ -80,8 +80,22 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'hva faen'),
+//      home: const MyHomePage(title: 'hva faen'),
+      home: const Layer(),
     );
+  }
+}
+
+class Layer extends StatelessWidget {
+  const Layer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+        color: Theme.of(context).colorScheme.inversePrimary,
+        child: const Center(
+          child: Text('Panel', style: TextStyle(fontSize: 12)),
+        ));
   }
 }
 

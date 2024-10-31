@@ -4,8 +4,8 @@ use raw_window_handle::{
 };
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry,
-    delegate_seat, delegate_xdg_popup, delegate_xdg_shell, delegate_xdg_window,
+    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
+    delegate_registry, delegate_seat, delegate_xdg_popup, delegate_xdg_shell, delegate_xdg_window,
     output::{OutputHandler, OutputState},
     reexports::{
         calloop::LoopHandle,
@@ -25,6 +25,7 @@ use smithay_client_toolkit::{
         Capability, SeatHandler, SeatState,
     },
     shell::{
+        wlr_layer::{LayerShell, LayerShellHandler, LayerSurface as WlrLayerSurface},
         xdg::{
             popup::{Popup as ToolkitPopup, PopupHandler},
             window::{Window as XdgWindow, WindowConfigure, WindowDecorations, WindowHandler},
@@ -54,6 +55,7 @@ use std::{
 
 use super::{
     channel::{channel, Event, Sender},
+    layershell::LayerSurface,
     util,
     window::Window,
 };
@@ -83,10 +85,12 @@ pub trait State {
 
 pub enum RecreateRequest {
     Window,
+    Layershell,
 }
 
 pub enum RecreateResponse {
     Window(XdgWindow),
+    Layershell(WlrLayerSurface),
 }
 
 pub enum Request {
@@ -95,31 +99,32 @@ pub enum Request {
 }
 
 pub struct Application<'a> {
-    pub(crate) registry_state: RegistryState,
-    pub(crate) seat_state: SeatState,
-    pub(crate) output_state: OutputState,
-    pub(crate) compositor_state: CompositorState,
-    pub(crate) cursor_shape_manager: CursorShapeManager,
+    registry_state: RegistryState,
+    seat_state: SeatState,
+    output_state: OutputState,
+    compositor_state: CompositorState,
+    cursor_shape_manager: CursorShapeManager,
 
-    pub(crate) loop_handle: LoopHandle<'a, Self>,
-    pub(crate) qh: QueueHandle<Self>,
+    loop_handle: LoopHandle<'a, Self>,
+    qh: QueueHandle<Self>,
 
-    pub(crate) keyboard: Option<wl_keyboard::WlKeyboard>,
-    pub(crate) pointer: Option<wl_pointer::WlPointer>,
+    keyboard: Option<wl_keyboard::WlKeyboard>,
+    pointer: Option<wl_pointer::WlPointer>,
 
-    pub(crate) xdg_shell: XdgShell,
+    xdg_shell: XdgShell,
+    layershell: LayerShell,
 
-    pub(crate) dph: WaylandDisplayHandle,
-    pub(crate) tx: Sender<Request>,
+    dph: WaylandDisplayHandle,
+    tx: Sender<Request>,
 
-    pub(crate) active_keyboard: Option<ObjectId>,
+    active_keyboard: Option<ObjectId>,
 
-    pub(crate) last_enter_serial: u32,
+    last_enter_serial: u32,
 
     counter: usize,
 
-    pub(crate) states: HashMap<usize, Rc<RefCell<dyn State>>>,
-    pub(crate) surface_id_to_id: HashMap<ObjectId, usize>,
+    states: HashMap<usize, Rc<RefCell<dyn State>>>,
+    surface_id_to_id: HashMap<ObjectId, usize>,
 }
 
 impl<'a> Application<'a>
@@ -164,6 +169,9 @@ where
 
                                     RecreateResponse::Window(xdg_window)
                                 }
+                                RecreateRequest::Layershell => {
+                                    todo!();
+                                }
                             };
 
                             a.surface_id_to_id.insert(surface_id.clone(), id);
@@ -196,6 +204,7 @@ where
             last_enter_serial: 0,
 
             xdg_shell: XdgShell::bind(&globals, &qh)?,
+            layershell: LayerShell::bind(&globals, &qh)?,
 
             qh,
             dph,
@@ -244,19 +253,12 @@ where
         xdg_window.set_min_size(Some((width as u32, height as u32)));
         xdg_window.commit();
 
-        let mut backend = Backend::new(&RawDisplayHandle::Wayland(self.dph))?;
-
-        {
-            let ptr = NonNull::new(xdg_window.wl_surface().id().as_ptr() as *mut std::ffi::c_void)
-                .unwrap();
-            let handle = WaylandWindowHandle::new(ptr);
-            _ = backend.surface(&RawWindowHandle::Wayland(handle), width, height)?;
-        };
+        let backend = Backend::new(&RawDisplayHandle::Wayland(self.dph))?;
 
         let tx = self.tx.clone();
         let id = self.counter.clone();
 
-        let window = Window::new(id, tx, Arc::new(Mutex::new(backend)), xdg_window);
+        let window = Window::new(id, tx, Arc::new(Mutex::new(backend)), xdg_window)?;
         let window = Rc::new(RefCell::new(window));
 
         self.states.insert(id, window.clone());
@@ -264,6 +266,33 @@ where
         self.counter += 1;
 
         Ok(window)
+    }
+
+    pub fn create_layer(
+        &mut self,
+        layer: smithay_client_toolkit::shell::wlr_layer::Layer,
+        namespace: String,
+    ) -> anyhow::Result<Rc<RefCell<LayerSurface>>> {
+        let surface = self.compositor_state.create_surface(&self.qh);
+        let surface_id = surface.id();
+
+        let wlr_layer_surface =
+            self.layershell
+                .create_layer_surface(&self.qh, surface, layer, Some(namespace), None);
+
+        let backend = Backend::new(&RawDisplayHandle::Wayland(self.dph))?;
+        let tx = self.tx.clone();
+        let id = self.counter.clone();
+
+        let layer_surface =
+            LayerSurface::new(id, tx, Arc::new(Mutex::new(backend)), wlr_layer_surface)?;
+        let layer_surface = Rc::new(RefCell::new(layer_surface));
+
+        self.states.insert(id, layer_surface.clone());
+        self.surface_id_to_id.insert(surface_id, id);
+        self.counter += 1;
+
+        Ok(layer_surface)
     }
 }
 
@@ -630,6 +659,34 @@ impl<'a> PopupHandler for Application<'a> {
     }
 }
 
+impl<'a> LayerShellHandler for Application<'a>
+where
+    'a: 'static,
+{
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &WlrLayerSurface) {}
+
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        layer: &WlrLayerSurface,
+        configure: smithay_client_toolkit::shell::wlr_layer::LayerSurfaceConfigure,
+        _serial: u32,
+    ) {
+        if !self.has_state(&layer.wl_surface().id()) {
+            return;
+        }
+
+        let state = self.state_mut(&layer.wl_surface().id());
+        let mut state = state.borrow_mut();
+
+        let width = configure.new_size.0;
+        let height = configure.new_size.1;
+
+        state.resize(width as usize, height as usize, 0, 0);
+    }
+}
+
 delegate_compositor!(@<'a: 'static> Application<'a>);
 delegate_output!(@<'a: 'static>Application<'a>);
 
@@ -639,9 +696,11 @@ delegate_pointer!(@<'a: 'static>Application<'a>);
 
 delegate_xdg_shell!(@<'a: 'static>Application<'a>);
 delegate_xdg_window!(@<'a: 'static>Application<'a>);
+delegate_xdg_popup!(@<'a: 'static>Application<'a>);
+
+delegate_layer!(@<'a: 'static>Application<'a>);
 
 delegate_registry!(@<'a: 'static>Application<'a>);
-delegate_xdg_popup!(@<'a: 'static>Application<'a>);
 
 impl<'a> ProvidesRegistryState for Application<'a>
 where

@@ -9,7 +9,10 @@ use std::{
 use raw_window_handle::{RawWindowHandle, WaylandWindowHandle};
 use smithay_client_toolkit::{
     reexports::calloop::channel::Sender,
-    shell::{xdg::window::Window as XdgWindow, WaylandSurface},
+    shell::{
+        wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerSurface as WlrLayerSurface},
+        WaylandSurface,
+    },
 };
 use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
 
@@ -21,74 +24,105 @@ use crate::{
 
 use super::app::{KeyState, RecreateRequest, RecreateResponse, State};
 
-pub struct Window {
+pub struct LayerSurface {
     backend: Arc<Mutex<Backend>>,
     instance: Option<Rc<RefCell<engine::Instance>>>,
     tx: Sender<Request>,
 
     id: usize,
 
-    title: String,
-    app_id: String,
     width: usize,
     height: usize,
 
-    window: Option<XdgWindow>,
+    surface: Option<WlrLayerSurface>,
 }
 
-impl Window {
+impl LayerSurface {
     pub fn new(
         id: usize,
         tx: Sender<Request>,
         backend: Arc<Mutex<Backend>>,
-        window: XdgWindow,
+        surface: WlrLayerSurface,
     ) -> anyhow::Result<Self> {
-        let ptr = NonNull::new(window.wl_surface().id().as_ptr() as *mut std::ffi::c_void).unwrap();
-        let handle = WaylandWindowHandle::new(ptr);
-        _ = backend
-            .lock()
-            .unwrap()
-            .surface(&RawWindowHandle::Wayland(handle), 1, 1)?;
-
         Ok(Self {
             id,
             backend,
             tx,
-            title: String::from(""),
-            app_id: String::from(""),
-            window: Some(window),
+            surface: Some(surface),
             instance: None,
             width: 0,
             height: 0,
         })
     }
 
-    pub fn set_title(&mut self, title: String) {
-        self.title = title.clone();
-        self.window.as_ref().unwrap().set_title(title);
-        self.window.as_ref().unwrap().commit();
+    pub fn set_anchor(&mut self, anchor: Anchor) {
+        self.surface.as_ref().unwrap().set_anchor(anchor);
+        self.surface.as_ref().unwrap().commit();
     }
 
-    pub fn set_app_id(&mut self, app_id: String) {
-        self.app_id = app_id.clone();
-        self.window.as_ref().unwrap().set_app_id(app_id);
-        self.window.as_ref().unwrap().commit();
+    pub fn set_exclusive_zone(&mut self, zone: i32) {
+        self.surface.as_ref().unwrap().set_exclusive_zone(zone);
+    }
+
+    pub fn set_keyboard_interactivity(&mut self, value: KeyboardInteractivity) {
+        self.surface
+            .as_ref()
+            .unwrap()
+            .set_keyboard_interactivity(value);
+    }
+
+    pub fn set_layer(&mut self, layer: Layer) {
+        self.surface.as_ref().unwrap().set_layer(layer);
+    }
+
+    pub fn set_size(&mut self, width: usize, height: usize) {
+        self.surface
+            .as_ref()
+            .unwrap()
+            .set_size(width as u32, height as u32);
+
+        if self.width == 0 && self.height == 0 {
+            let ptr =
+                NonNull::new(self.surface.as_ref().unwrap().wl_surface().id().as_ptr()
+                    as *mut std::ffi::c_void)
+                .unwrap();
+            let handle = WaylandWindowHandle::new(ptr);
+            _ = self
+                .backend
+                .lock()
+                .unwrap()
+                .surface(&RawWindowHandle::Wayland(handle), width, height)
+                .unwrap();
+        } else {
+            self.backend
+                .lock()
+                .unwrap()
+                .resize(&MAIN_SURFACE, width, height, 0, 0);
+        }
+
+        self.width = width;
+        self.height = height;
+    }
+
+    pub fn commit(&mut self) {
+        self.surface.as_ref().unwrap().commit();
     }
 }
 
-impl State for Window {
+impl State for LayerSurface {
     fn id(&self) -> usize {
         self.id.clone()
     }
 
     fn map(&mut self, response: super::app::RecreateResponse) {
-        assert!(self.window.is_none());
-        if let RecreateResponse::Window(window) = response {
-            self.window = Some(window);
+        assert!(self.surface.is_none());
+
+        if let RecreateResponse::Layershell(surface) = response {
+            self.surface = Some(surface);
         }
 
         let ptr = NonNull::new(
-            self.window.as_ref().unwrap().wl_surface().id().as_ptr() as *mut std::ffi::c_void
+            self.surface.as_ref().unwrap().wl_surface().id().as_ptr() as *mut std::ffi::c_void
         )
         .unwrap();
         let handle = WaylandWindowHandle::new(ptr);
@@ -107,7 +141,7 @@ impl State for Window {
     }
 
     fn surface(&self) -> &WlSurface {
-        self.window.as_ref().unwrap().wl_surface()
+        self.surface.as_ref().unwrap().wl_surface()
     }
 
     fn resize(&mut self, width: usize, height: usize, dx: usize, dy: usize) {
@@ -183,7 +217,7 @@ impl State for Window {
     }
 }
 
-impl Shell for Window {
+impl Shell for LayerSurface {
     fn backend(&mut self) -> anyhow::Result<Arc<Mutex<Backend>>> {
         Ok(self.backend.clone())
     }
@@ -197,7 +231,7 @@ impl Shell for Window {
         let id = self.surface().id();
         self.tx.send(Request::Unmap { id }).unwrap();
 
-        self.window = None;
+        self.surface = None;
 
         Ok(())
     }
@@ -207,7 +241,7 @@ impl Shell for Window {
         self.tx
             .send(Request::Recreate {
                 id,
-                req: RecreateRequest::Window,
+                req: RecreateRequest::Layershell,
             })
             .unwrap();
 
