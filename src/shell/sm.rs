@@ -1,7 +1,5 @@
 use cursor_icon::CursorIcon;
-use raw_window_handle::{
-    RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
-};
+use raw_window_handle::{RawDisplayHandle, WaylandDisplayHandle};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
@@ -14,6 +12,7 @@ use smithay_client_toolkit::{
             protocol::{wl_keyboard, wl_pointer},
             Connection,
         },
+        protocols::xdg::shell::client::xdg_surface::XdgSurface,
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -29,7 +28,7 @@ use smithay_client_toolkit::{
         xdg::{
             popup::{Popup as ToolkitPopup, PopupHandler},
             window::{Window as XdgWindow, WindowConfigure, WindowDecorations, WindowHandler},
-            XdgShell,
+            XdgPositioner, XdgShell,
         },
         WaylandSurface,
     },
@@ -37,30 +36,33 @@ use smithay_client_toolkit::{
 use wayland_backend::client::ObjectId;
 use wayland_client::{
     globals::registry_queue_init,
-    protocol::{
-        wl_output, wl_seat,
-        wl_surface::{self, WlSurface},
-    },
+    protocol::{wl_output, wl_seat, wl_surface},
     Proxy, QueueHandle,
 };
 use xkeysym::Keysym;
 
 use std::{
-    cell::RefCell,
     collections::HashMap,
     ptr::NonNull,
-    rc::Rc,
     sync::{Arc, Mutex},
 };
 
 use super::{
     channel::{channel, Event, Sender},
     layershell::LayerSurface,
+    popup::Popup,
+    positioner::Positioner,
     util,
     window::Window,
 };
 
-use crate::{backend::Backend, engine::PointerButtons};
+use crate::{app::Application, backend::Backend, engine::PointerButtons};
+
+#[derive(Debug)]
+pub enum PopupParent {
+    XdgSurface(XdgSurface),
+    LayerSurface(WlrLayerSurface),
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum KeyState {
@@ -70,7 +72,6 @@ pub enum KeyState {
 
 pub trait State {
     fn id(&self) -> usize;
-    fn surface(&self) -> &WlSurface;
     fn resize(&mut self, width: usize, height: usize, dx: usize, dy: usize);
     fn exit(&mut self);
 
@@ -86,26 +87,30 @@ pub trait State {
 pub enum RecreateRequest {
     Window,
     Layershell,
+    Popup(Positioner, PopupParent),
 }
 
 pub enum RecreateResponse {
     Window(XdgWindow),
     Layershell(WlrLayerSurface),
+    Popup(ToolkitPopup),
 }
 
 pub enum Request {
     Recreate { id: usize, req: RecreateRequest },
     Unmap { id: ObjectId },
+    PopupGrab { popup: ToolkitPopup, serial: usize },
 }
 
-pub struct Application<'a> {
+pub struct SurfaceManager<'a> {
     registry_state: RegistryState,
     seat_state: SeatState,
     output_state: OutputState,
     compositor_state: CompositorState,
     cursor_shape_manager: CursorShapeManager,
 
-    loop_handle: LoopHandle<'a, Self>,
+    backend: Backend,
+
     qh: QueueHandle<Self>,
 
     keyboard: Option<wl_keyboard::WlKeyboard>,
@@ -114,7 +119,6 @@ pub struct Application<'a> {
     xdg_shell: XdgShell,
     layershell: LayerShell,
 
-    dph: WaylandDisplayHandle,
     tx: Sender<Request>,
 
     active_keyboard: Option<ObjectId>,
@@ -123,33 +127,39 @@ pub struct Application<'a> {
 
     counter: usize,
 
-    states: HashMap<usize, Rc<RefCell<dyn State>>>,
+    states: HashMap<usize, Arc<Mutex<dyn State>>>,
     surface_id_to_id: HashMap<ObjectId, usize>,
 }
 
-impl<'a> Application<'a>
+impl<'a> SurfaceManager<'a>
 where
     'a: 'static,
 {
-    pub fn new(handle: LoopHandle<'a, Self>) -> anyhow::Result<Self> {
+    pub fn new(handle: LoopHandle<'a, Application<'a>>) -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env().unwrap();
         let ptr = NonNull::new(conn.backend().display_ptr() as *mut std::ffi::c_void).unwrap();
         let dph = WaylandDisplayHandle::new(ptr);
 
+        let backend = Backend::global_prepare(&RawDisplayHandle::Wayland(dph))?;
+
         // Enumerate the list of globals to get the protocols the server implements.
-        let (globals, event_queue) = registry_queue_init(&conn).unwrap();
+        let (globals, event_queue) = registry_queue_init::<SurfaceManager<'a>>(&conn).unwrap();
         let qh = event_queue.handle();
 
         let source = WaylandSource::new(conn.clone(), event_queue);
         handle
             .clone()
-            .insert_source(source, |_, queue, data| queue.dispatch_pending(data))
+            .insert_source(source, |_, queue, data| {
+                queue.dispatch_pending(&mut data.lock().sm)
+            })
             .expect("could not insert");
 
         let (tx, rx) = channel();
 
         handle
             .insert_source(rx, |e, _, a| {
+                let a = &mut a.lock().sm;
+
                 if let Event::Msg(req) = e {
                     match req {
                         Request::Recreate { id, req } => {
@@ -172,15 +182,51 @@ where
                                 RecreateRequest::Layershell => {
                                     todo!();
                                 }
+                                RecreateRequest::Popup(positioner, parent) => {
+                                    let popup = match parent {
+                                        PopupParent::XdgSurface(parent) => {
+                                            let popup = ToolkitPopup::from_surface(
+                                                Some(&parent),
+                                                &positioner.build(),
+                                                &a.qh,
+                                                surface,
+                                                &a.xdg_shell,
+                                            )
+                                            .expect("could not create toolkit popup");
+                                            popup.wl_surface().commit();
+                                            popup
+                                        }
+                                        PopupParent::LayerSurface(parent) => {
+                                            let popup = ToolkitPopup::from_surface(
+                                                None,
+                                                &positioner.build(),
+                                                &a.qh,
+                                                surface,
+                                                &a.xdg_shell,
+                                            )
+                                            .expect("could not create toolkit popup");
+                                            parent.get_popup(&popup.xdg_popup());
+                                            popup.wl_surface().commit();
+                                            popup
+                                        }
+                                    };
+
+                                    RecreateResponse::Popup(popup)
+                                }
                             };
 
                             a.surface_id_to_id.insert(surface_id.clone(), id);
                             let state = a.state_mut(&surface_id);
-                            let mut state = state.borrow_mut();
+                            let mut state = state.lock().unwrap();
                             state.map(response);
                         }
                         Request::Unmap { id } => {
                             a.surface_id_to_id.remove(&id);
+                        }
+                        Request::PopupGrab { popup, serial } => {
+                            popup
+                                .xdg_popup()
+                                .grab(&a.seat_state.seats().next().unwrap(), serial as u32);
                         }
                     }
                 }
@@ -188,9 +234,9 @@ where
             .unwrap();
 
         Ok(Self {
-            loop_handle: handle,
-
             active_keyboard: None,
+
+            backend,
 
             keyboard: None,
             pointer: None,
@@ -207,7 +253,6 @@ where
             layershell: LayerShell::bind(&globals, &qh)?,
 
             qh,
-            dph,
             tx,
 
             counter: 0,
@@ -217,7 +262,7 @@ where
         })
     }
 
-    pub fn state_mut(&mut self, id: &ObjectId) -> Rc<RefCell<dyn State>> {
+    pub fn state_mut(&mut self, id: &ObjectId) -> Arc<Mutex<dyn State>> {
         let id = self.surface_id_to_id[id];
         self.states[&id].clone()
     }
@@ -239,11 +284,28 @@ where
         Ok(())
     }
 
+    pub fn get_positioner(&mut self) -> anyhow::Result<Positioner> {
+        let xdg_positioner = XdgPositioner::new(&self.xdg_shell)?;
+        Ok(Positioner::new(xdg_positioner))
+    }
+
+    pub fn prepare_popup(&mut self) -> anyhow::Result<Arc<Mutex<Popup>>> {
+        let id = self.counter.clone();
+        let dummy = self.compositor_state.create_surface(&self.qh);
+        let popup = Popup::new(id, self.tx.clone(), self.backend, &dummy)?;
+        let popup = Arc::new(Mutex::new(popup));
+
+        self.states.insert(id, popup.clone());
+        self.counter += 1;
+
+        Ok(popup)
+    }
+
     pub fn create_window(
         &mut self,
         width: usize,
         height: usize,
-    ) -> anyhow::Result<Rc<RefCell<Window>>> {
+    ) -> anyhow::Result<Arc<Mutex<Window>>> {
         let surface = self.compositor_state.create_surface(&self.qh);
         let surface_id = surface.id();
         let xdg_window = self
@@ -253,13 +315,11 @@ where
         xdg_window.set_min_size(Some((width as u32, height as u32)));
         xdg_window.commit();
 
-        let backend = Backend::new(&RawDisplayHandle::Wayland(self.dph))?;
-
         let tx = self.tx.clone();
         let id = self.counter.clone();
 
-        let window = Window::new(id, tx, Arc::new(Mutex::new(backend)), xdg_window)?;
-        let window = Rc::new(RefCell::new(window));
+        let window = Window::new(id, tx, self.backend, xdg_window)?;
+        let window = Arc::new(Mutex::new(window));
 
         self.states.insert(id, window.clone());
         self.surface_id_to_id.insert(surface_id, id);
@@ -272,7 +332,7 @@ where
         &mut self,
         layer: smithay_client_toolkit::shell::wlr_layer::Layer,
         namespace: String,
-    ) -> anyhow::Result<Rc<RefCell<LayerSurface>>> {
+    ) -> anyhow::Result<Arc<Mutex<LayerSurface>>> {
         let surface = self.compositor_state.create_surface(&self.qh);
         let surface_id = surface.id();
 
@@ -280,13 +340,11 @@ where
             self.layershell
                 .create_layer_surface(&self.qh, surface, layer, Some(namespace), None);
 
-        let backend = Backend::new(&RawDisplayHandle::Wayland(self.dph))?;
         let tx = self.tx.clone();
         let id = self.counter.clone();
 
-        let layer_surface =
-            LayerSurface::new(id, tx, Arc::new(Mutex::new(backend)), wlr_layer_surface)?;
-        let layer_surface = Rc::new(RefCell::new(layer_surface));
+        let layer_surface = LayerSurface::new(id, tx, self.backend, wlr_layer_surface)?;
+        let layer_surface = Arc::new(Mutex::new(layer_surface));
 
         self.states.insert(id, layer_surface.clone());
         self.surface_id_to_id.insert(surface_id, id);
@@ -296,7 +354,7 @@ where
     }
 }
 
-impl<'a> CompositorHandler for Application<'a>
+impl<'a> CompositorHandler for SurfaceManager<'a>
 where
     'a: 'static,
 {
@@ -327,6 +385,7 @@ where
         _surface: &wl_surface::WlSurface,
         _time: u32,
     ) {
+        println!("requesting frame");
     }
 
     fn surface_enter(
@@ -350,7 +409,7 @@ where
     }
 }
 
-impl<'a> OutputHandler for Application<'a>
+impl<'a> OutputHandler for SurfaceManager<'a>
 where
     'a: 'static,
 {
@@ -383,7 +442,7 @@ where
     }
 }
 
-impl<'a> WindowHandler for Application<'a>
+impl<'a> WindowHandler for SurfaceManager<'a>
 where
     'a: 'static,
 {
@@ -394,7 +453,7 @@ where
 
         let id = {
             let state = self.state_mut(&window.wl_surface().id());
-            let mut state = state.borrow_mut();
+            let mut state = state.lock().unwrap();
             state.exit();
             state.id()
         };
@@ -416,7 +475,7 @@ where
         }
 
         let state = self.state_mut(&window.wl_surface().id());
-        let mut state = state.borrow_mut();
+        let mut state = state.lock().unwrap();
 
         let width = configure.new_size.0.map(|v| v.get()).unwrap_or(256);
         let height = configure.new_size.1.map(|v| v.get()).unwrap_or(256);
@@ -446,7 +505,7 @@ where
     }
 }
 
-impl<'a> SeatHandler for Application<'a>
+impl<'a> SeatHandler for SurfaceManager<'a>
 where
     'a: 'static,
 {
@@ -464,25 +523,30 @@ where
         capability: Capability,
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
+            // FIXME: recreate repeats with a custom implementation which allows LoopHandle<Application>
+            //let keyboard = self
+            //    .seat_state
+            //    .get_keyboard_with_repeat(
+            //        qh,
+            //        &seat,
+            //        None,
+            //        self.loop_handle.clone(),
+            //        Box::new(move |app, _, event| match app.active_keyboard.clone() {
+            //            Some(id) => {
+            //                if !app.has_state(&id) {
+            //                    return;
+            //                }
+            //                let state = app.state_mut(&id);
+            //                let mut state = state.lock().unwrap();
+            //                state.key_event(&event, KeyState::Pressed);
+            //            }
+            //            None => {}
+            //        }),
+            //    )
+            //    .expect("Failed to create keyboard");
             let keyboard = self
                 .seat_state
-                .get_keyboard_with_repeat(
-                    qh,
-                    &seat,
-                    None,
-                    self.loop_handle.clone(),
-                    Box::new(move |app, _, event| match app.active_keyboard.clone() {
-                        Some(id) => {
-                            if !app.has_state(&id) {
-                                return;
-                            }
-                            let state = app.state_mut(&id);
-                            let mut state = state.borrow_mut();
-                            state.key_event(&event, KeyState::Pressed);
-                        }
-                        None => {}
-                    }),
-                )
+                .get_keyboard(qh, &seat, None)
                 .expect("Failed to create keyboard");
 
             self.keyboard = Some(keyboard);
@@ -510,7 +574,7 @@ where
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 
-impl<'a> KeyboardHandler for Application<'a>
+impl<'a> KeyboardHandler for SurfaceManager<'a>
 where
     'a: 'static,
 {
@@ -535,6 +599,7 @@ where
         _surface: &wl_surface::WlSurface,
         _: u32,
     ) {
+        println!("keyboard leave");
         self.active_keyboard = None;
     }
 
@@ -553,7 +618,7 @@ where
                 }
 
                 let state = self.state_mut(&id);
-                let mut state = state.borrow_mut();
+                let mut state = state.lock().unwrap();
                 state.key_event(&event, KeyState::Pressed);
             }
             None => {}
@@ -582,7 +647,7 @@ where
     }
 }
 
-impl<'a> PointerHandler for Application<'a>
+impl<'a> PointerHandler for SurfaceManager<'a>
 where
     'a: 'static,
 {
@@ -609,7 +674,7 @@ where
             }
 
             let state = self.state_mut(&event.surface.id());
-            let mut state = state.borrow_mut();
+            let mut state = state.lock().unwrap();
 
             match &event.kind {
                 Enter { serial } => {
@@ -643,23 +708,44 @@ where
     }
 }
 
-impl<'a> PopupHandler for Application<'a> {
-    fn done(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _popup: &ToolkitPopup) {
-        println!("popup done");
+impl<'a> PopupHandler for SurfaceManager<'a>
+where
+    'a: 'static,
+{
+    fn done(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, popup: &ToolkitPopup) {
+        if !self.has_state(&popup.wl_surface().id()) {
+            return;
+        }
+
+        let id = {
+            let state = self.state_mut(&popup.wl_surface().id());
+            let mut state = state.lock().unwrap();
+            state.exit();
+            state.id()
+        };
+
+        self.surface_id_to_id.remove(&popup.wl_surface().id());
+        self.states.remove(&id);
     }
 
     fn configure(
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _popup: &ToolkitPopup,
-        _config: smithay_client_toolkit::shell::xdg::popup::PopupConfigure,
+        popup: &ToolkitPopup,
+        config: smithay_client_toolkit::shell::xdg::popup::PopupConfigure,
     ) {
-        println!("got popup configure");
+        if !self.has_state(&popup.wl_surface().id()) {
+            return;
+        }
+        let state = self.state_mut(&popup.wl_surface().id());
+        let mut state = state.lock().unwrap();
+
+        state.resize(config.width as usize, config.height as usize, 0, 0);
     }
 }
 
-impl<'a> LayerShellHandler for Application<'a>
+impl<'a> LayerShellHandler for SurfaceManager<'a>
 where
     'a: 'static,
 {
@@ -678,7 +764,7 @@ where
         }
 
         let state = self.state_mut(&layer.wl_surface().id());
-        let mut state = state.borrow_mut();
+        let mut state = state.lock().unwrap();
 
         let width = configure.new_size.0;
         let height = configure.new_size.1;
@@ -687,22 +773,22 @@ where
     }
 }
 
-delegate_compositor!(@<'a: 'static> Application<'a>);
-delegate_output!(@<'a: 'static>Application<'a>);
+delegate_compositor!(@<'a: 'static> SurfaceManager<'a>);
+delegate_output!(@<'a: 'static>SurfaceManager<'a>);
 
-delegate_seat!(@<'a: 'static>Application<'a>);
-delegate_keyboard!(@<'a: 'static>Application<'a>);
-delegate_pointer!(@<'a: 'static>Application<'a>);
+delegate_seat!(@<'a: 'static>SurfaceManager<'a>);
+delegate_keyboard!(@<'a: 'static>SurfaceManager<'a>);
+delegate_pointer!(@<'a: 'static>SurfaceManager<'a>);
 
-delegate_xdg_shell!(@<'a: 'static>Application<'a>);
-delegate_xdg_window!(@<'a: 'static>Application<'a>);
-delegate_xdg_popup!(@<'a: 'static>Application<'a>);
+delegate_xdg_shell!(@<'a: 'static>SurfaceManager<'a>);
+delegate_xdg_window!(@<'a: 'static>SurfaceManager<'a>);
+delegate_xdg_popup!(@<'a: 'static>SurfaceManager<'a>);
 
-delegate_layer!(@<'a: 'static>Application<'a>);
+delegate_layer!(@<'a: 'static>SurfaceManager<'a>);
 
-delegate_registry!(@<'a: 'static>Application<'a>);
+delegate_registry!(@<'a: 'static>SurfaceManager<'a>);
 
-impl<'a> ProvidesRegistryState for Application<'a>
+impl<'a> ProvidesRegistryState for SurfaceManager<'a>
 where
     'a: 'static,
 {

@@ -1,22 +1,19 @@
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use bindings::FlutterEngineRunTask;
 
 use crate::shell::channel::{channel, Event, Sender};
 
 use crate::shell::{timer::TimeoutAction, timer::Timer, LoopHandle};
 use crate::Application;
 
-type Task = (Duration, bindings::FlutterTask);
-enum Msg {
-    Engine(bindings::FlutterEngine),
-    Task(Task),
-}
+type Task = (usize, Duration, bindings::FlutterTask);
 
-pub struct TaskRunner {
-    tx: Sender<Msg>,
-    main_thread_id: thread::ThreadId,
+#[derive(Debug)]
+enum Msg {
+    Engine(usize, bindings::FlutterEngine),
+    Task(Task),
 }
 
 fn duration_until_target(target_nanos: u64) -> Duration {
@@ -33,25 +30,45 @@ fn duration_until_target(target_nanos: u64) -> Duration {
     }
 }
 
-impl TaskRunner {
-    pub fn new<'a>(handle: &LoopHandle<'a, Application<'static>>) -> Self {
+struct TaskRunnerInner {
+    pub map: HashMap<usize, bindings::FlutterEngine>,
+    counter: usize,
+}
+
+#[derive(Clone)]
+pub struct TaskRunner {
+    inner: Arc<Mutex<TaskRunnerInner>>,
+    tx: Sender<Msg>,
+    main_thread_id: thread::ThreadId,
+}
+
+#[derive(Debug)]
+pub struct TaskRunnerClient {
+    tx: Sender<Msg>,
+    id: usize,
+    main_thread_id: thread::ThreadId,
+}
+
+impl TaskRunnerInner {
+    pub fn new<'a>(handle: &LoopHandle<'a, Application<'static>>) -> (Self, Sender<Msg>) {
         let (tx, rx) = channel();
 
-        let mut engine = std::ptr::null_mut();
         let handle2 = handle.clone();
         handle
-            .insert_source(rx, move |e: Event<Msg>, _, _| match e {
+            .insert_source(rx, move |e: Event<Msg>, _, a| match e {
                 Event::Msg(msg) => match msg {
-                    Msg::Engine(e) => engine = e,
-                    Msg::Task(t) => {
-                        if engine.is_null() {
-                            return;
-                        }
-
+                    Msg::Engine(id, engine) => {
+                        println!(
+                            "inserted engine: {:?}",
+                            a.task_runner().inner().map.insert(id, engine)
+                        );
+                    }
+                    Msg::Task(task) => {
                         handle2
                             .clone()
-                            .insert_source(Timer::from_duration(t.0), move |_, _, _| {
-                                unsafe { FlutterEngineRunTask(engine, &t.1) };
+                            .insert_source(Timer::from_duration(task.1), move |_, _, a| {
+                                let engine = a.task_runner().inner().map[&task.0];
+                                unsafe { bindings::FlutterEngineRunTask(engine, &task.2) };
                                 TimeoutAction::Drop
                             })
                             .unwrap();
@@ -61,15 +78,49 @@ impl TaskRunner {
             })
             .unwrap();
 
-        Self {
+        (
+            Self {
+                counter: 0,
+                map: HashMap::new(),
+            },
             tx,
-
-            main_thread_id: std::thread::current().id(),
-        }
+        )
     }
 
+    fn next_id(&mut self) -> usize {
+        let id = self.counter.clone();
+        self.counter += 1;
+        id
+    }
+}
+
+impl TaskRunner {
+    pub fn new<'a>(handle: &LoopHandle<'a, Application<'static>>) -> anyhow::Result<Self> {
+        let (inner, tx) = TaskRunnerInner::new(handle);
+
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+            tx,
+            main_thread_id: thread::current().id(),
+        })
+    }
+
+    fn inner(&self) -> MutexGuard<'_, TaskRunnerInner> {
+        self.inner.lock().unwrap()
+    }
+
+    pub fn fork(&self) -> TaskRunnerClient {
+        TaskRunnerClient {
+            tx: self.tx.clone(),
+            id: self.inner.lock().unwrap().next_id(),
+            main_thread_id: self.main_thread_id.clone(),
+        }
+    }
+}
+
+impl TaskRunnerClient {
     pub fn set_engine(&mut self, engine: bindings::FlutterEngine) {
-        self.tx.send(Msg::Engine(engine)).unwrap();
+        self.tx.send(Msg::Engine(self.id, engine)).unwrap();
     }
 
     pub unsafe extern "C" fn runs_on_thread(data: *mut std::ffi::c_void) -> bool {
@@ -83,10 +134,11 @@ impl TaskRunner {
         data: *mut std::ffi::c_void,
     ) {
         let runner = unsafe { &*(data as *const Self) as &Self };
-        match runner
-            .tx
-            .send(Msg::Task((duration_until_target(target_time), task)))
-        {
+        match runner.tx.send(Msg::Task((
+            runner.id,
+            duration_until_target(target_time),
+            task,
+        ))) {
             Ok(_) => {}
             Err(e) => {
                 println!("{:?}", e.to_string());

@@ -1,7 +1,4 @@
-use std::{
-    ffi::{CStr, CString},
-    sync::{Arc, Mutex},
-};
+use std::ffi::{CStr, CString};
 
 use smithay_client_toolkit::reexports::calloop::{
     channel::{channel, Channel, ChannelError, Event, Sender},
@@ -10,8 +7,8 @@ use smithay_client_toolkit::reexports::calloop::{
 use thiserror::Error;
 
 use crate::{
-    backend::{Backend, MAIN_SURFACE},
-    tasks::TaskRunner,
+    backend::{Backend, Surface},
+    tasks::{TaskRunner, TaskRunnerClient},
 };
 
 use super::PointerButtons;
@@ -42,7 +39,7 @@ pub enum EngineEvent {
 }
 
 struct Userdata {
-    backend: Arc<Mutex<Backend>>,
+    surface: Surface,
     tx: Sender<EngineEvent>,
 }
 
@@ -51,12 +48,13 @@ pub struct Engine {
     proc_table: bindings::FlutterEngineProcTable,
     args: bindings::FlutterProjectArgs,
 
-    assets_path: String,
-    icu_data_path: String,
+    assets_path: CString,
+    icu_data_path: CString,
+    pub entry: Option<CString>,
 
     userdata: Box<Userdata>,
 
-    platform_task_runner: Option<TaskRunner>,
+    platform_task_runner: TaskRunnerClient,
 
     last_phase: bindings::FlutterPointerPhase,
 }
@@ -67,34 +65,17 @@ pub struct EngineSource {
 
 unsafe extern "C" fn renderer_clear_current(data: *mut std::ffi::c_void) -> bool {
     let userdata: &mut Userdata = unsafe { &mut *(data as *mut Userdata) };
-    let backend = userdata.backend.lock().unwrap();
-    if backend.has(&MAIN_SURFACE) {
-        backend.clear_current().is_ok()
-    } else {
-        // Trick the flutter engine into thinking everything is ok with rendereing. Although it is not clearing any surfaces.
-        // This is part of how we are able to hide the surface its drawing to but still keep the instance running.
-        true
-    }
+    userdata.surface.clear_current().is_ok()
 }
 
 unsafe extern "C" fn renderer_make_current(data: *mut std::ffi::c_void) -> bool {
     let userdata: &mut Userdata = unsafe { &mut *(data as *mut Userdata) };
-    let backend = userdata.backend.lock().unwrap();
-    if backend.has(&MAIN_SURFACE) {
-        backend.make_current(&MAIN_SURFACE).is_ok()
-    } else {
-        true
-    }
+    userdata.surface.make_current().is_ok()
 }
 
 unsafe extern "C" fn renderer_present(data: *mut std::ffi::c_void) -> bool {
     let userdata: &mut Userdata = unsafe { &mut *(data as *mut Userdata) };
-    let backend = userdata.backend.lock().unwrap();
-    if backend.has(&MAIN_SURFACE) {
-        backend.swap_buffers(&MAIN_SURFACE).is_ok()
-    } else {
-        true
-    }
+    userdata.surface.swap_buffers().is_ok()
 }
 
 unsafe extern "C" fn renderer_fbo_callback(_data: *mut std::ffi::c_void) -> u32 {
@@ -133,20 +114,23 @@ unsafe extern "C" fn renderer_proc_resolver(
     name: *const i8,
 ) -> *mut std::ffi::c_void {
     let userdata: &mut Userdata = unsafe { &mut *(data as *mut Userdata) };
-    let cstr = std::ffi::CStr::from_ptr(name);
-    userdata
-        .backend
-        .lock()
-        .unwrap()
-        .get_proc_address(cstr.to_str().unwrap())
-        .expect("could not get proc address") as *mut std::ffi::c_void
+
+    if userdata.surface.present() {
+        let cstr = std::ffi::CStr::from_ptr(name).to_str().unwrap();
+        Backend::get_proc_address(cstr).expect("could not resolve proc address")
+            as *mut std::ffi::c_void
+    } else {
+        std::ptr::null_mut()
+    }
 }
 
 impl Engine {
     pub fn new(
-        backend: Arc<Mutex<Backend>>,
+        surface: Surface,
         assets_path: String,
         icu_data_path: String,
+        task_runner: TaskRunner,
+        entry: Option<String>,
     ) -> anyhow::Result<(Self, EngineSource)> {
         let mut proc_table: bindings::FlutterEngineProcTable = unsafe { std::mem::zeroed() };
         proc_table.struct_size = std::mem::size_of::<bindings::FlutterEngineProcTable>();
@@ -159,7 +143,7 @@ impl Engine {
 
         let (tx, rx) = channel();
 
-        let userdata = Box::new(Userdata { backend, tx });
+        let userdata = Box::new(Userdata { surface, tx });
 
         let mut args: bindings::FlutterProjectArgs = unsafe { std::mem::zeroed() };
 
@@ -172,10 +156,12 @@ impl Engine {
                 proc_table,
                 args,
 
-                platform_task_runner: None,
+                platform_task_runner: task_runner.fork(),
 
-                assets_path,
-                icu_data_path,
+                entry: entry.map_or(None, |s| Some(CString::new(s).unwrap())),
+
+                assets_path: CString::new(assets_path)?,
+                icu_data_path: CString::new(icu_data_path)?,
 
                 inner: std::ptr::null_mut(),
                 last_phase: 0,
@@ -212,10 +198,6 @@ impl Engine {
                 &message as *const bindings::FlutterPlatformMessage,
             );
         }
-    }
-
-    pub fn add_platform_task_runner(&mut self, runner: TaskRunner) {
-        self.platform_task_runner = Some(runner);
     }
 
     pub fn runs_aot(&self) -> bool {
@@ -272,31 +254,44 @@ impl Engine {
             },
         };
 
-        let assets_path = CString::new(self.assets_path.clone())?;
-        let icu_data_path = CString::new(self.icu_data_path.clone())?;
+        let mut task_runner_description: bindings::FlutterTaskRunnerDescription =
+            unsafe { std::mem::zeroed() };
+        task_runner_description.struct_size =
+            std::mem::size_of::<bindings::FlutterTaskRunnerDescription>();
+        task_runner_description.post_task_callback = Some(TaskRunnerClient::post_task);
 
-        if let Some(task_runner) = &mut self.platform_task_runner {
-            let mut task_runner_description: bindings::FlutterTaskRunnerDescription =
-                unsafe { std::mem::zeroed() };
-            task_runner_description.struct_size =
-                std::mem::size_of::<bindings::FlutterTaskRunnerDescription>();
-            task_runner_description.post_task_callback = Some(crate::tasks::TaskRunner::post_task);
-            task_runner_description.runs_task_on_current_thread_callback =
-                Some(crate::tasks::TaskRunner::runs_on_thread);
-            task_runner_description.user_data = task_runner as *mut _ as *mut std::ffi::c_void;
+        task_runner_description.runs_task_on_current_thread_callback =
+            Some(TaskRunnerClient::runs_on_thread);
+        task_runner_description.user_data =
+            &mut self.platform_task_runner as *mut _ as *mut std::ffi::c_void;
+        task_runner_description.identifier = 0;
 
-            let mut custom_task_runners: bindings::FlutterCustomTaskRunners =
-                unsafe { std::mem::zeroed() };
+        let mut custom_task_runners: bindings::FlutterCustomTaskRunners =
+            unsafe { std::mem::zeroed() };
 
-            custom_task_runners.struct_size =
-                std::mem::size_of::<bindings::FlutterCustomTaskRunners>();
-            custom_task_runners.platform_task_runner = &task_runner_description as *const _ as _;
+        custom_task_runners.struct_size = std::mem::size_of::<bindings::FlutterCustomTaskRunners>();
+        custom_task_runners.platform_task_runner = &task_runner_description as *const _ as _;
 
-            args.custom_task_runners = &custom_task_runners as *const _ as _;
+        args.custom_task_runners = &custom_task_runners as *const _ as _;
+
+        args.assets_path = self.assets_path.as_ptr();
+        args.icu_data_path = self.icu_data_path.as_ptr();
+
+        let disable_service_auth_codes = CString::new("--disable-service-auth-codes").unwrap();
+        let disable_observatory = CString::new("--disable-observatory").unwrap();
+        let dart_vm_args = vec![
+            disable_service_auth_codes.as_ptr(),
+            disable_observatory.as_ptr(),
+        ];
+
+        if self.entry.is_some() {
+            args.dart_entrypoint_argc = dart_vm_args.len() as i32;
+            args.dart_entrypoint_argv = dart_vm_args.as_ptr();
         }
 
-        args.assets_path = assets_path.as_ptr();
-        args.icu_data_path = icu_data_path.as_ptr();
+        if let Some(entry) = &self.entry {
+            args.custom_dart_entrypoint = entry.as_ptr();
+        }
 
         let result = unsafe {
             bindings::FlutterEngineRun(
@@ -307,13 +302,12 @@ impl Engine {
                 &mut self.inner,
             )
         };
+
         if result != bindings::FlutterEngineResult_kSuccess {
             return Err(EngineError::RunFailed.into());
         }
 
-        if let Some(task_runner) = &mut self.platform_task_runner {
-            task_runner.set_engine(self.inner);
-        }
+        self.platform_task_runner.set_engine(self.inner());
 
         Ok(())
     }
@@ -531,3 +525,6 @@ impl EventSource for EngineSource {
         Ok(action)
     }
 }
+
+unsafe impl Send for Engine {}
+unsafe impl Sync for Engine {}

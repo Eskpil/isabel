@@ -1,19 +1,32 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-void sidecar_main() {}
+@pragma('vm:entry-point')
+void isabelSidecarDemo() {
+  print("running isabel sidecar demo");
+  runApp(Container(color: Colors.black));
+}
 
-class SidecarRequestSpawn {
+class SidecarRequestCreate {
   final double x, y;
-  final String entry;
+  final int width, height;
+  final String name;
 
-  const SidecarRequestSpawn(
-      {required this.x, required this.y, required this.entry});
+  const SidecarRequestCreate(
+      {required this.x,
+      required this.y,
+      required this.name,
+      required this.width,
+      required this.height});
 
   Map<dynamic, dynamic> serialize() {
-    var data = {'x': x, 'y': y, 'entry': entry};
+    var data = {
+      'anchorX': x.toInt(),
+      'anchorY': y.toInt(),
+      'anchorWidth': width,
+      'anchorHeight': height,
+      'name': name
+    };
     return data;
   }
 }
@@ -27,40 +40,10 @@ class Sidecar {
     });
   }
 
-  void spawn(double x, double y, String entry) {
-    final req = SidecarRequestSpawn(entry: entry, x: x, y: y);
-    platform.invokeMethod('Spawn', req.serialize());
-  }
-}
-
-class SerialEvent {
-  int serial;
-
-  SerialEvent({required this.serial});
-
-  factory SerialEvent.fromJSON(dynamic json) {
-    return SerialEvent(serial: json['serial']);
-  }
-}
-
-class Decorations {
-  static const platform =
-      MethodChannel('isabel/decorations', JSONMethodCodec());
-
-  SerialEvent? lastMove;
-
-  Decorations() {
-    platform.setMethodCallHandler((call) async {
-      if (call.method == "move") {
-        final event = SerialEvent.fromJSON(call.arguments);
-        lastMove = event;
-      }
-    });
-  }
-
-  void initiateMove(SerialEvent event) {
-    var data = <dynamic, dynamic>{'serial': event.serial};
-    platform.invokeMethod("initiateMove", data);
+  void spawn(double x, double y, String name) {
+    final req =
+        SidecarRequestCreate(height: 8, width: 8, x: x, y: y, name: name);
+    platform.invokeMethod('request_popup', req.serialize());
   }
 }
 
@@ -80,82 +63,70 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-//      home: const MyHomePage(title: 'hva faen'),
       home: const Layer(),
     );
   }
 }
 
-class Layer extends StatelessWidget {
+class Layer extends StatefulWidget {
   const Layer({super.key});
 
   @override
+  State<Layer> createState() => _LayerState();
+}
+
+class _LayerState extends State<Layer> {
+  @override
   Widget build(BuildContext context) {
     return Container(
+        padding: const EdgeInsets.only(right: 720, left: 720),
         color: Theme.of(context).colorScheme.inversePrimary,
-        child: const Center(
-          child: Text('Panel', style: TextStyle(fontSize: 12)),
-        ));
+        child: const Row(children: [
+          Text('Panel', style: TextStyle(fontSize: 12)),
+          Spacer(),
+          SidecarSpawner(
+              name: "isabel.io/sidecar/demo",
+              child: Text('Open popup', style: TextStyle(fontSize: 12))),
+        ]));
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+class SidecarSpawner extends StatefulWidget {
+  final Widget child;
+  final String name;
+  const SidecarSpawner({super.key, required this.child, required this.name});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<SidecarSpawner> createState() => _SidecarSpawnerState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final Decorations _decorations = Decorations();
+class _SidecarSpawnerState extends State<SidecarSpawner> {
   final Sidecar _sidecar = Sidecar();
-  int count = 0;
 
-  void _move(DragStartDetails details) {
-    if (_decorations.lastMove == null) {
-      return;
-    }
+  void _onPressed(BuildContext context, TapDownDetails details) {
+    final obj = context.findRenderObject()! as RenderBox;
+    final rect = obj.paintBounds;
 
-    _decorations.initiateMove(_decorations.lastMove!);
-  }
+    final global = obj.localToGlobal(Offset.zero);
 
-  void _onPressed(TapDownDetails details) {
-    print(details.globalPosition.dx);
-    print(details.globalPosition.dy);
-    print('');
+    final width = rect.width;
 
-    _sidecar.spawn(
-        details.globalPosition.dx, details.globalPosition.dy, "sidecar_main");
-  }
+    final globalX = global.dx;
+    final globalY = global.dy;
 
-  void _onIncrementPressed() {
-    setState(() {
-      count++;
-    });
+    final x = globalX + width / 2;
+    final y = globalY - 17;
+
+    _sidecar.spawn(x, y, widget.name);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text('Pressed $count times'),
-            TextButton(
-                onPressed: _onIncrementPressed, child: const Text('Increment')),
-            const Text('Welcome to the isabel flutter emebdder',
-                style: TextStyle(color: Colors.black)),
-            GestureDetector(
-                onTapDown: _onPressed,
-                child: Container(
-                    color: Theme.of(context).colorScheme.primary,
-                    child: const Text('Open popup')))
-          ],
-        ),
-      ),
+    return GestureDetector(
+      onTapDown: (details) {
+        _onPressed(context, details);
+      },
+      child: widget.child,
     );
   }
 }

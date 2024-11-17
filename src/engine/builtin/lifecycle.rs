@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
@@ -9,16 +9,12 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Lifecycle {
-    shell: Option<Rc<RefCell<dyn Shell>>>,
     tx: Option<Sender<EngineRequest>>,
 }
 
 impl Lifecycle {
     pub fn new() -> Self {
-        Self {
-            shell: None,
-            tx: None,
-        }
+        Self { tx: None }
     }
 
     pub fn app_is_inactive(&mut self) {
@@ -49,10 +45,9 @@ impl Lifecycle {
 impl crate::engine::Plugin for Lifecycle {
     fn init(
         &mut self,
-        shell: Rc<RefCell<dyn Shell>>,
+        _shell: Arc<Mutex<dyn Shell>>,
         tx: Sender<EngineRequest>,
     ) -> anyhow::Result<()> {
-        self.shell = Some(shell);
         self.tx = Some(tx);
         Ok(())
     }

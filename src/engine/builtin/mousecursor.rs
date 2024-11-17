@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use crate::{engine::EngineRequest, Application, Shell};
 use cursor_icon::CursorIcon;
@@ -53,23 +53,20 @@ pub enum MouseCursorKind {
 }
 
 #[derive(Clone)]
-pub struct Mousecursor {
-    shell: Option<Rc<RefCell<dyn Shell>>>,
-}
+pub struct Mousecursor {}
 
 impl Mousecursor {
     pub fn new() -> Self {
-        Self { shell: None }
+        Self {}
     }
 }
 
 impl crate::engine::Plugin for Mousecursor {
     fn init(
         &mut self,
-        shell: Rc<RefCell<dyn Shell>>,
+        _shell: Arc<Mutex<dyn Shell>>,
         _tx: Sender<EngineRequest>,
     ) -> anyhow::Result<()> {
-        self.shell = Some(shell);
         Ok(())
     }
 
@@ -121,7 +118,7 @@ impl crate::engine::Plugin for Mousecursor {
                     MouseCursorKind::ZoomOut => CursorIcon::ZoomOut,
                 };
 
-                app.set_cursor_icon(icon)?;
+                app.lock().sm.set_cursor_icon(icon)?;
             }
         }
 

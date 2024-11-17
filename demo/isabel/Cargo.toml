@@ -8,3 +8,4 @@ anyhow = "1.0.89"
 clap = { version = "4.5.19", features = ["derive"] }
 env_logger = "0.11.5"
 isabel-rs = { path = "../../" }
+sidecar = { path = "../../sidecar" }

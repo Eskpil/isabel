@@ -1,7 +1,5 @@
 use std::{
-    cell::RefCell,
     ptr::NonNull,
-    rc::Rc,
     sync::{Arc, Mutex},
     usize,
 };
@@ -14,19 +12,19 @@ use smithay_client_toolkit::{
         WaylandSurface,
     },
 };
-use wayland_client::{protocol::wl_surface::WlSurface, Proxy};
+use wayland_client::Proxy;
 
 use crate::{
-    backend::{Backend, MAIN_SURFACE},
+    backend::{Backend, Surface},
     engine::{self, PointerButtons, Shell},
-    shell::app::Request,
 };
 
-use super::app::{KeyState, RecreateRequest, RecreateResponse, State};
+use super::sm::{KeyState, PopupParent, RecreateRequest, RecreateResponse, Request, State};
 
 pub struct LayerSurface {
-    backend: Arc<Mutex<Backend>>,
-    instance: Option<Rc<RefCell<engine::Instance>>>,
+    backend: Backend,
+    surface: Surface,
+    instance: Option<Arc<Mutex<engine::Instance>>>,
     tx: Sender<Request>,
 
     id: usize,
@@ -34,21 +32,26 @@ pub struct LayerSurface {
     width: usize,
     height: usize,
 
-    surface: Option<WlrLayerSurface>,
+    inner: Option<WlrLayerSurface>,
 }
 
 impl LayerSurface {
     pub fn new(
         id: usize,
         tx: Sender<Request>,
-        backend: Arc<Mutex<Backend>>,
-        surface: WlrLayerSurface,
+        backend: Backend,
+        inner: WlrLayerSurface,
     ) -> anyhow::Result<Self> {
+        let ptr = NonNull::new(inner.wl_surface().id().as_ptr() as *mut std::ffi::c_void).unwrap();
+        let handle = WaylandWindowHandle::new(ptr);
+        let surface = Surface::new(backend, &RawWindowHandle::Wayland(handle), 1, 1)?;
+
         Ok(Self {
             id,
             backend,
+            surface,
             tx,
-            surface: Some(surface),
+            inner: Some(inner),
             instance: None,
             width: 0,
             height: 0,
@@ -56,56 +59,67 @@ impl LayerSurface {
     }
 
     pub fn set_anchor(&mut self, anchor: Anchor) {
-        self.surface.as_ref().unwrap().set_anchor(anchor);
-        self.surface.as_ref().unwrap().commit();
+        self.inner.as_ref().unwrap().set_anchor(anchor);
+        self.inner.as_ref().unwrap().commit();
     }
 
     pub fn set_exclusive_zone(&mut self, zone: i32) {
-        self.surface.as_ref().unwrap().set_exclusive_zone(zone);
+        self.inner.as_ref().unwrap().set_exclusive_zone(zone);
     }
 
     pub fn set_keyboard_interactivity(&mut self, value: KeyboardInteractivity) {
-        self.surface
+        self.inner
             .as_ref()
             .unwrap()
             .set_keyboard_interactivity(value);
     }
 
     pub fn set_layer(&mut self, layer: Layer) {
-        self.surface.as_ref().unwrap().set_layer(layer);
+        self.inner.as_ref().unwrap().set_layer(layer);
     }
 
     pub fn set_size(&mut self, width: usize, height: usize) {
-        self.surface
+        self.inner
             .as_ref()
             .unwrap()
             .set_size(width as u32, height as u32);
 
-        if self.width == 0 && self.height == 0 {
-            let ptr =
-                NonNull::new(self.surface.as_ref().unwrap().wl_surface().id().as_ptr()
-                    as *mut std::ffi::c_void)
-                .unwrap();
-            let handle = WaylandWindowHandle::new(ptr);
-            _ = self
-                .backend
-                .lock()
-                .unwrap()
-                .surface(&RawWindowHandle::Wayland(handle), width, height)
-                .unwrap();
-        } else {
-            self.backend
-                .lock()
-                .unwrap()
-                .resize(&MAIN_SURFACE, width, height, 0, 0);
-        }
+        self.surface
+            .resize(width, height, 0, 0)
+            .expect("could not resize layer shell surface");
 
         self.width = width;
         self.height = height;
     }
 
     pub fn commit(&mut self) {
-        self.surface.as_ref().unwrap().commit();
+        self.inner.as_ref().unwrap().commit();
+    }
+
+    fn hide(&mut self) -> anyhow::Result<()> {
+        self.instance().lock().unwrap().hide();
+        self.pointer_leave();
+
+        self.surface.clear();
+
+        let id = self.inner.as_ref().unwrap().wl_surface().id();
+        self.tx.send(Request::Unmap { id }).unwrap();
+
+        Ok(())
+    }
+
+    fn show(&mut self) -> anyhow::Result<()> {
+        let id = self.id();
+        self.tx
+            .send(Request::Recreate {
+                id,
+                req: RecreateRequest::Layershell,
+            })
+            .unwrap();
+
+        self.instance().lock().unwrap().show();
+
+        Ok(())
     }
 }
 
@@ -114,47 +128,41 @@ impl State for LayerSurface {
         self.id.clone()
     }
 
-    fn map(&mut self, response: super::app::RecreateResponse) {
-        assert!(self.surface.is_none());
+    fn map(&mut self, response: super::sm::RecreateResponse) {
+        assert!(self.inner.is_none());
 
-        if let RecreateResponse::Layershell(surface) = response {
-            self.surface = Some(surface);
+        if let RecreateResponse::Layershell(inner) = response {
+            self.inner = Some(inner);
         }
 
         let ptr = NonNull::new(
-            self.surface.as_ref().unwrap().wl_surface().id().as_ptr() as *mut std::ffi::c_void
+            self.inner.as_ref().unwrap().wl_surface().id().as_ptr() as *mut std::ffi::c_void
         )
         .unwrap();
         let handle = WaylandWindowHandle::new(ptr);
-        _ = self
-            .backend
-            .lock()
-            .unwrap()
-            .surface(&RawWindowHandle::Wayland(handle), self.width, self.height)
-            .expect("could create egl surface");
+        self.surface
+            .recreate(&RawWindowHandle::Wayland(handle), self.width, self.height)
+            .expect("could not recreate surface");
     }
 
     fn exit(&mut self) {
         if self.instance.is_some() {
-            self.instance().borrow_mut().engine_mut().exit().unwrap();
+            self.instance().lock().unwrap().engine_mut().exit().unwrap();
         }
-    }
-
-    fn surface(&self) -> &WlSurface {
-        self.surface.as_ref().unwrap().wl_surface()
     }
 
     fn resize(&mut self, width: usize, height: usize, dx: usize, dy: usize) {
         self.width = width;
         self.height = height;
 
-        self.backend
-            .lock()
-            .unwrap()
-            .resize(&MAIN_SURFACE, width, height, dx, dy);
+        self.surface
+            .resize(width, height, dx, dy)
+            .expect("could not resize");
+
         if self.instance.is_some() {
             self.instance()
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .engine_mut()
                 .resize(width, height)
                 .unwrap();
@@ -164,7 +172,8 @@ impl State for LayerSurface {
     fn pointer_enter(&mut self, x: f64, y: f64) {
         if self.instance.is_some() {
             self.instance()
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .engine_mut()
                 .pointer_enter(x, y)
                 .unwrap();
@@ -174,7 +183,8 @@ impl State for LayerSurface {
     fn pointer_leave(&mut self) {
         if self.instance.is_some() {
             self.instance()
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .engine_mut()
                 .pointer_leave()
                 .unwrap();
@@ -184,7 +194,8 @@ impl State for LayerSurface {
     fn pointer_motion(&mut self, x: f64, y: f64, time: usize) {
         if self.instance.is_some() {
             self.instance()
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .engine_mut()
                 .pointer_motion(x, y, time)
                 .unwrap();
@@ -194,7 +205,8 @@ impl State for LayerSurface {
     fn pointer_button(&mut self, x: f64, y: f64, time: u32, button: PointerButtons, pressed: bool) {
         if self.instance.is_some() {
             self.instance()
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .engine_mut()
                 .pointer_button(x, y, time, button, pressed)
                 .unwrap();
@@ -209,7 +221,8 @@ impl State for LayerSurface {
         if self.instance.is_some() {
             if state == KeyState::Pressed {
                 self.instance()
-                    .borrow_mut()
+                    .lock()
+                    .unwrap()
                     .key_press(event.keysym)
                     .unwrap();
             }
@@ -218,47 +231,30 @@ impl State for LayerSurface {
 }
 
 impl Shell for LayerSurface {
-    fn backend(&mut self) -> anyhow::Result<Arc<Mutex<Backend>>> {
-        Ok(self.backend.clone())
+    fn surface(&self) -> Surface {
+        self.surface.clone()
     }
 
-    fn hide(&mut self) -> anyhow::Result<()> {
-        self.instance().borrow_mut().hide();
-        self.pointer_leave();
+    fn parent_info(&self) -> engine::ParentInfo {
+        let parent = self.inner.as_ref().unwrap().clone();
 
-        self.backend.lock().unwrap().remove(&MAIN_SURFACE);
-
-        let id = self.surface().id();
-        self.tx.send(Request::Unmap { id }).unwrap();
-
-        self.surface = None;
-
-        Ok(())
+        engine::ParentInfo {
+            width: self.width,
+            height: self.height,
+            last_configure: 0,
+            parent: PopupParent::LayerSurface(parent),
+        }
     }
 
-    fn show(&mut self) -> anyhow::Result<()> {
-        let id = self.id();
-        self.tx
-            .send(Request::Recreate {
-                id,
-                req: RecreateRequest::Layershell,
-            })
-            .unwrap();
-
-        self.instance().borrow_mut().show();
-
-        Ok(())
-    }
-
-    fn set_instance(&mut self, instance: Rc<RefCell<engine::Instance>>) {
+    fn set_instance(&mut self, instance: Arc<Mutex<engine::Instance>>) {
         self.instance = Some(instance);
     }
 
-    fn instance(&mut self) -> Rc<RefCell<engine::Instance>> {
+    fn instance(&mut self) -> Arc<Mutex<engine::Instance>> {
         if self.instance.is_none() {
             panic!("instance not set");
         }
 
-        self.instance.as_ref().unwrap().clone()
+        Arc::clone(&self.instance.as_ref().unwrap())
     }
 }

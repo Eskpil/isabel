@@ -1,19 +1,19 @@
 use std::sync::{Arc, Mutex};
-use std::{cell::RefCell, rc::Rc};
 
 use smithay_client_toolkit::reexports::calloop::channel::{channel, Event, Sender};
 
-use crate::{backend::Backend, shell::app::Application};
+use crate::backend::Surface;
+use crate::Application;
 use crate::{shell::LoopHandle, tasks::TaskRunner};
 
 use super::builtin::{Lifecycle, Textinput};
 use super::engine::{EngineEvent, EngineSource};
-use super::EngineRequest;
 use super::{
     builtin::{self},
     engine::Engine,
-    Bundle, InstanceError, Plugin, Shell,
+    Bundle, InstanceError, Plugin,
 };
+use super::{EngineRequest, InstanceState};
 
 pub struct Instance {
     engine: Engine,
@@ -21,9 +21,15 @@ pub struct Instance {
 
     plugins: Vec<Box<dyn Plugin>>,
 }
+
 impl Instance {
-    pub fn new(backend: Arc<Mutex<Backend>>, bundle: Bundle) -> anyhow::Result<Self> {
-        let engine = Engine::new(backend, bundle.assets, bundle.icu_data)?;
+    pub fn new(
+        surface: Surface,
+        bundle: Bundle,
+        task_runner: TaskRunner,
+        entry: Option<String>,
+    ) -> anyhow::Result<Self> {
+        let engine = Engine::new(surface, bundle.assets, bundle.icu_data, task_runner, entry)?;
         let mut instance = Self {
             engine: engine.0,
             source: Some(engine.1),
@@ -68,7 +74,7 @@ impl Instance {
         lifecycle.app_is_resumed();
     }
 
-    pub fn with(&mut self, plugin: Box<dyn Plugin>) {
+    pub fn with(&mut self, plugin: Box<dyn Plugin + Send + Sync>) {
         self.plugins.push(plugin);
     }
 
@@ -90,7 +96,7 @@ impl Instance {
 
     pub fn preload_plugins(
         &mut self,
-        shell: Rc<RefCell<dyn super::Shell>>,
+        shell: Arc<Mutex<dyn super::Shell>>,
         tx: Sender<EngineRequest>,
     ) -> anyhow::Result<()> {
         for plugin in &mut self.plugins {
@@ -100,29 +106,33 @@ impl Instance {
         Ok(())
     }
 
-    pub fn run<'a, T>(
+    fn state_updated(&mut self, state: InstanceState) -> anyhow::Result<()> {
+        for plugin in &mut self.plugins {
+            plugin.state_changed(state)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn run<'a>(
         mut self,
         handle: &LoopHandle<'a, Application<'static>>,
-        window: Rc<RefCell<T>>,
-    ) -> anyhow::Result<()>
-    where
-        T: Shell,
-    {
-        let task_runner = TaskRunner::new(&handle);
-        self.engine.add_platform_task_runner(task_runner);
-
+        shell: Arc<Mutex<dyn super::Shell>>,
+    ) -> anyhow::Result<()> {
         let (tx, rx) = channel();
-        self.preload_plugins(window.clone(), tx)?;
+        self.preload_plugins(Arc::clone(&shell), tx)?;
         self.engine.run()?;
 
+        self.state_updated(InstanceState::Running)?;
+
         let engine_source = self.source.take().unwrap();
-        let instance = Rc::new(RefCell::new(self));
+        let instance = Arc::new(Mutex::new(self));
         let instance2 = instance.clone();
 
         handle
             .insert_source(engine_source, move |event, _, a| match event {
                 EngineEvent::PlatformMessage { channel, data } => {
-                    let mut instance = instance2.borrow_mut();
+                    let mut instance = instance2.lock().unwrap();
                     let plugin = instance
                         .plugins
                         .iter_mut()
@@ -144,7 +154,9 @@ impl Instance {
                 if let Event::Msg(e) = e {
                     match e {
                         EngineRequest::Publish { channel, data } => {
-                            let mut instance = instance3.borrow_mut();
+                            println!("thread: {:?}", std::thread::current().id());
+
+                            let mut instance = instance3.lock().unwrap();
                             instance.engine.publish(channel, data);
                         }
                     }
@@ -152,7 +164,7 @@ impl Instance {
             })
             .expect("could not insert");
 
-        window.borrow_mut().set_instance(instance);
+        shell.lock().unwrap().set_instance(instance);
 
         Ok(())
     }

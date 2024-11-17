@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use crate::textmodel::{TextModel, TextRange};
 use crate::{Application, Shell};
@@ -223,7 +222,6 @@ fn publish<T: Serialize>(channel: String, data: &T, tx: &Sender<EngineRequest>) 
 
 #[derive(Clone)]
 pub struct Textinput {
-    shell: Option<Rc<RefCell<dyn Shell>>>,
     tx: Option<Sender<EngineRequest>>,
 
     active_model: Option<TextModel>,
@@ -235,7 +233,6 @@ pub struct Textinput {
 impl Textinput {
     pub fn new() -> Self {
         Self {
-            shell: None,
             tx: None,
 
             active_model: None,
@@ -334,10 +331,9 @@ impl Textinput {
 impl crate::engine::Plugin for Textinput {
     fn init(
         &mut self,
-        shell: Rc<RefCell<dyn Shell>>,
+        _shell: Arc<Mutex<dyn Shell>>,
         tx: Sender<EngineRequest>,
     ) -> anyhow::Result<()> {
-        self.shell = Some(shell);
         self.tx = Some(tx);
         Ok(())
     }
