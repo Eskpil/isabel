@@ -9,6 +9,7 @@ fn main() {
         "cargo:rustc-link-search=native={}/linux",
         env::var("CARGO_MANIFEST_DIR").unwrap()
     );
+    println!("cargo:rustc-link-search=native=/usr/local/lib");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=flutter_embedder.h");

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use smithay_client_toolkit::reexports::calloop::LoopHandle;
 
-use crate::{tasks::TaskRunner, Bundle, SurfaceManager};
+use crate::{shell, tasks::TaskRunner, Bundle, SurfaceManager};
 
 pub struct ApplicationInner<'a> {
     pub sm: SurfaceManager<'a>,

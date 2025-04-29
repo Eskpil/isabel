@@ -11,7 +11,7 @@ use isabel_rs::{
 
 use crate::{
     module::{Module, ModuleCapabilities, PopupInfo, ShowRequest},
-    ui::{Ui},
+    ui::Ui,
 };
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -60,45 +60,45 @@ impl Module for Demo {
     }
 
     fn show(&self, req: ShowRequest) -> anyhow::Result<()> {
-        if let ShowRequest::Popup(positioner, parent) = req {
-            let mut popup = self.popup.lock().unwrap();
-            popup.show(positioner, parent)?;
+        let ShowRequest::Popup(positioner, parent) = req;
 
-            let surface = popup.surface();
+        let mut popup = self.popup.lock().unwrap();
+        popup.show(positioner, parent)?;
 
-            let handle = self.handle.clone();
+        let surface = popup.surface();
 
-            self.handle
-                .insert_source(
-                    Timer::from_duration(Duration::from_nanos(20)),
-                    move |_, _, _| {
-                        let surface = surface.clone();
-                        let mut ui = Ui::new(surface.clone()).expect("could not create ui");
+        let handle = self.handle.clone();
 
-                        handle
-                            .insert_source(
-                                Timer::from_duration(Duration::from_millis(16)),
-                                move |_, _, _| {
-                                    if !surface.clone().present() {
-                                        return TimeoutAction::Drop;
-                                    }
+        self.handle
+            .insert_source(
+                Timer::from_duration(Duration::from_nanos(20)),
+                move |_, _, _| {
+                    let surface = surface.clone();
+                    let mut ui = Ui::new(surface.clone()).expect("could not create ui");
 
-                                    ui.run(|ctx| {
-                                        egui::SidePanel::left("my_side_panel").show(ctx, |ui| {
-                                            ui.heading("Hello, World!");
-                                        });
+                    handle
+                        .insert_source(
+                            Timer::from_duration(Duration::from_millis(16)),
+                            move |_, _, _| {
+                                if !surface.clone().present() {
+                                    return TimeoutAction::Drop;
+                                }
+
+                                ui.run(|ctx| {
+                                    egui::CentralPanel::default().show(ctx, |ui| {
+                                        ui.heading("Hello, World!");
                                     });
+                                });
 
-                                    TimeoutAction::ToDuration(Duration::from_millis(16))
-                                },
-                            )
-                            .expect("msg");
+                                TimeoutAction::ToDuration(Duration::from_millis(16))
+                            },
+                        )
+                        .expect("msg");
 
-                        TimeoutAction::Drop
-                    },
-                )
-                .expect("could not insert handle");
-        }
+                    TimeoutAction::Drop
+                },
+            )
+            .expect("could not insert handle");
 
         Ok(())
     }

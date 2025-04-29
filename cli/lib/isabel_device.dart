@@ -20,6 +20,7 @@ class IsabelDevice extends Device {
       required this.processManager,
       required this.logger})
       : super(
+            logger: logger,
             category: Category.desktop,
             platformType: PlatformType.custom,
             ephemeral: true);

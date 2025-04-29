@@ -7,6 +7,7 @@ import 'package:flutter_tools/src/base/analyze_size.dart';
 import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/build_info.dart';
+import 'package:flutter_tools/src/dart/package_map.dart';
 import 'package:flutter_tools/src/build_system/build_system.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/assemble.dart';
@@ -67,6 +68,7 @@ class IsabelBuilder {
     print(buildInfo.mode);
 
     final Environment environment = Environment(
+      packageConfigPath: findPackageConfigFileOrDefault(project.directory).path,
       projectDir: project.directory,
       outputDir: outputDir,
       buildDir: project.dartTool.childDirectory('flutter_build'),

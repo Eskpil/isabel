@@ -10,7 +10,6 @@ members = [
     "crates/bindings",
     "crates/linux-event-codes",
     "demo/isabel",
-    "apps/networksettings/isabel",
 ]
 
 [dependencies]
@@ -23,7 +22,7 @@ cursor-icon = "1.1.0"
 env_logger = "0.11.5"
 anyhow = "1.0.86"
 clap = { version = "4.5.19", features = ["derive"] }
-khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+khronos-egl = { version = "6.0.0", features = ["static"] }
 log = "0.4.22"
 raw-window-handle = "0.6.2"
 wayland-client = { version = "0.31.1" }

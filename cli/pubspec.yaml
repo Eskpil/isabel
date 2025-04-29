@@ -9,7 +9,7 @@ environment:
 # Add regular dependencies here.
 dependencies:
   flutter_tools:
-    path: /opt/flutter/packages/flutter_tools
+    path: /home/linus/flutter/packages/flutter_tools
   # path: ^1.8.0
 
 dev_dependencies:

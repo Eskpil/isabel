@@ -34,6 +34,9 @@ fn main() -> anyhow::Result<()> {
 
     let mut app = Application::new(eloop.handle(), bundle.clone())?;
 
+    let layer_surface =
+        app.create_layer_surface(isabel_rs::Layer::Bottom, "isabel-example".to_owned())?;
+
     let layer_surface = {
         let sm = &mut app.lock().sm;
         sm.create_layer(isabel_rs::Layer::Bottom, "isabel-example".to_owned())?

@@ -3,7 +3,6 @@ import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/globals.dart' as globals;
 import 'package:flutter_tools/src/macos/macos_workflow.dart';
 import 'package:flutter_tools/src/windows/windows_workflow.dart';
-import 'package:flutter_tools/src/fuchsia/fuchsia_workflow.dart';
 import 'package:flutter_tools/src/base/context.dart';
 import 'package:flutter_tools/src/features.dart';
 import 'package:flutter_tools/src/android/android_workflow.dart';
@@ -19,6 +18,7 @@ class IsabelDeviceManager extends FlutterDeviceManager {
       : super(
           logger: globals.logger,
           processManager: globals.processManager,
+          nativeAssetsBuilder: globals.nativeAssetsBuilder,
           platform: globals.platform,
           androidSdk: globals.androidSdk,
           iosSimulatorUtils: globals.iosSimulatorUtils!,
@@ -28,12 +28,10 @@ class IsabelDeviceManager extends FlutterDeviceManager {
           artifacts: globals.artifacts!,
           flutterVersion: globals.flutterVersion,
           androidWorkflow: androidWorkflow!,
-          fuchsiaWorkflow: fuchsiaWorkflow!,
           xcDevice: globals.xcdevice!,
           userMessages: globals.userMessages,
           windowsWorkflow: windowsWorkflow!,
           macOSWorkflow: context.get<MacOSWorkflow>()!,
-          fuchsiaSdk: globals.fuchsiaSdk!,
           operatingSystemUtils: globals.os,
           customDevicesConfig: CustomDevicesConfig(
             fileSystem: globals.fs,

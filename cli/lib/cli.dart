@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter_tools/executable.dart' as flutter;
 import 'package:flutter_tools/runner.dart' as runner;
 import 'package:flutter_tools/src/application_package.dart';
@@ -60,7 +59,7 @@ Future<void> main(List<String> args) async {
 
   //args.add("run");
 
-  Cache.flutterRoot = '/opt/flutter';
+  Cache.flutterRoot = '/home/linus/flutter';
 
   await runner.run(
       args,
