@@ -4,7 +4,6 @@ use std::{
     usize,
 };
 
-use std::sync::mpmc;
 
 use raw_window_handle::{RawWindowHandle, WaylandWindowHandle};
 use smithay_client_toolkit::{

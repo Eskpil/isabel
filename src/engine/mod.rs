@@ -3,7 +3,6 @@ mod engine;
 mod instance;
 mod keys;
 
-use std::sync::{mpmc, Arc, Mutex};
 
 pub use cursor_icon::CursorIcon;
 
@@ -20,7 +19,7 @@ pub enum PointerButtons {
     Back,
 }
 
-use crate::{backend::Surface, event::Event, shell::sm::PopupParent, Application};
+use crate::{backend::Surface, shell::sm::PopupParent, Application};
 
 #[derive(Clone)]
 pub struct Bundle {

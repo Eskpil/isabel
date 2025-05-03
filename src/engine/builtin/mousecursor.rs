@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 
 use crate::{engine::EngineRequest, Application, Shell};
 use cursor_icon::CursorIcon;

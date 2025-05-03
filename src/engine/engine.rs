@@ -1,7 +1,4 @@
-use std::{
-    ffi::{CStr, CString},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::ffi::{CStr, CString};
 
 use smithay_client_toolkit::reexports::calloop::{
     channel::{channel, Channel, ChannelError, Event, Sender},

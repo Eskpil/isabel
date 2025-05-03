@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 
 use crate::textmodel::{TextModel, TextRange};
 use crate::{Application, Shell};
