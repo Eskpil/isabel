@@ -58,10 +58,7 @@ impl TaskRunnerInner {
             .insert_source(rx, move |e: Event<Msg>, _, a| match e {
                 Event::Msg(msg) => match msg {
                     Msg::Engine(id, engine) => {
-                        println!(
-                            "inserted engine: {:?}",
-                            a.task_runner().inner().map.insert(id, engine)
-                        );
+                        a.task_runner().inner().map.insert(id, engine);
                     }
                     Msg::Task(task) => {
                         handle2

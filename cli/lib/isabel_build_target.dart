@@ -238,6 +238,7 @@ class NativeBundle {
 
     if (buildInfo!.buildInfo.isRelease) {
       cmd.add('--release');
+      cmd.add('--features=aot');
     }
 
     // Run the native build.

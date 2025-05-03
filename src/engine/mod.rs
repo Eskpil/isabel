@@ -1,8 +1,9 @@
 mod builtin;
 mod engine;
 mod instance;
+mod keys;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{mpmc, Arc, Mutex};
 
 pub use cursor_icon::CursorIcon;
 
@@ -19,7 +20,7 @@ pub enum PointerButtons {
     Back,
 }
 
-use crate::{backend::Surface, shell::sm::PopupParent, Application};
+use crate::{backend::Surface, event::Event, shell::sm::PopupParent, Application};
 
 #[derive(Clone)]
 pub struct Bundle {
@@ -39,19 +40,13 @@ pub struct ParentInfo {
 pub trait Shell: Downcast {
     fn surface(&self) -> Surface;
     fn parent_info(&self) -> ParentInfo;
-
-    fn set_instance(&mut self, instance: Arc<Mutex<Instance>>);
-    fn instance(&mut self) -> Arc<Mutex<Instance>>;
 }
 
 impl_downcast!(Shell);
 
 pub trait Plugin: Downcast + DowncastSync {
-    fn init(
-        &mut self,
-        shell: Arc<Mutex<dyn Shell>>,
-        tx: Sender<EngineRequest>,
-    ) -> anyhow::Result<()>;
+    fn init(&mut self, shell: &mut Box<dyn Shell>, tx: Sender<EngineRequest>)
+        -> anyhow::Result<()>;
     fn on(&self) -> &str;
 
     fn state_changed(&mut self, _state: InstanceState) -> anyhow::Result<()> {

@@ -1,11 +1,7 @@
 use clap::Parser;
-use sidecar::Sidecar;
 use std::time::Duration;
 
-use isabel_rs::{
-    shell::timer::{TimeoutAction, Timer},
-    Anchor, Application, Bundle, EventLoop, Instance, Shell,
-};
+use isabel_rs::{Application, Bundle, EventLoop, Instance, Shell, Window};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -34,40 +30,25 @@ fn main() -> anyhow::Result<()> {
 
     let mut app = Application::new(eloop.handle(), bundle.clone())?;
 
-    let layer_surface =
-        app.create_layer_surface(isabel_rs::Layer::Bottom, "isabel-example".to_owned())?;
+    let (display_tx, display_rx) = Instance::channels();
 
-    let layer_surface = {
-        let sm = &mut app.lock().sm;
-        sm.create_layer(isabel_rs::Layer::Bottom, "isabel-example".to_owned())?
-    };
-    layer_surface.lock().unwrap().set_size(3440, 48);
-    layer_surface.lock().unwrap().set_anchor(Anchor::BOTTOM);
-    layer_surface.lock().unwrap().set_exclusive_zone(48);
-    layer_surface
-        .lock()
-        .unwrap()
-        .set_keyboard_interactivity(isabel_rs::KeyboardInteractivity::OnDemand);
-    layer_surface.lock().unwrap().commit();
+    let mut window = Window::new(&mut app, display_tx, 720, 480)?;
 
-    let mut instance = {
-        let layer_surface = layer_surface.lock().unwrap();
-        Instance::new(
-            layer_surface.surface(),
-            app.bundle(),
-            app.task_runner(),
-            None,
-        )?
-    };
+    let instance = Instance::new(
+        window.surface(),
+        bundle,
+        app.task_runner(),
+        display_rx,
+        None,
+    )?;
 
-    let sidecar = Sidecar::new(app.clone())?;
-    instance.with(Box::new(sidecar));
+    window.set_title("Isabel Example");
+    window.set_app_id("io.isabel.Example");
 
-    let handle = eloop.handle();
-    instance.run(&handle, layer_surface)?;
+    instance.run(&app.handle(), Box::new(window))?;
 
     loop {
-        eloop.dispatch(Duration::from_millis(0), &mut app)?;
+        eloop.dispatch(Duration::from_millis(20), &mut app)?;
         if app.exited() {
             break;
         }

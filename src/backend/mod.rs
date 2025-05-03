@@ -38,6 +38,8 @@ fn create_context(display: egl::Display) -> anyhow::Result<(egl::Context, egl::C
         8,
         egl::BLUE_SIZE,
         8,
+        egl::ALPHA_SIZE,
+        8,
         egl::NONE,
     ];
 

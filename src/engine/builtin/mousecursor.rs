@@ -62,11 +62,7 @@ impl Mousecursor {
 }
 
 impl crate::engine::Plugin for Mousecursor {
-    fn init(
-        &mut self,
-        _shell: Arc<Mutex<dyn Shell>>,
-        _tx: Sender<EngineRequest>,
-    ) -> anyhow::Result<()> {
+    fn init(&mut self, _: &mut Box<dyn Shell>, _tx: Sender<EngineRequest>) -> anyhow::Result<()> {
         Ok(())
     }
 

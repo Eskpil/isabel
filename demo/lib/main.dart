@@ -63,8 +63,24 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const Layer(),
+//      home: const Layer(),
+      home: Scroll(),
     );
+  }
+}
+
+class Scroll extends StatelessWidget {
+  final ScrollController controller = ScrollController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scrollbar(
+        controller: controller,
+        child: ListView.builder(
+            controller: controller,
+            itemBuilder: (BuildContext context, int index) {
+              return Text('Item $index');
+            }));
   }
 }
 

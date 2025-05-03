@@ -3,6 +3,10 @@ name = "bindings"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+aot = [] # Add this section for your Ahead-Of-Time compilation feature
+
+
 [dependencies]
 
 [build-dependencies]

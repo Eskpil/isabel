@@ -1,4 +1,7 @@
-use std::ffi::{CStr, CString};
+use std::{
+    ffi::{CStr, CString},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use smithay_client_toolkit::reexports::calloop::{
     channel::{channel, Channel, ChannelError, Event, Sender},
@@ -8,10 +11,14 @@ use thiserror::Error;
 
 use crate::{
     backend::{Backend, Surface},
+    sm::KeyState,
     tasks::{TaskRunner, TaskRunnerClient},
 };
 
-use super::PointerButtons;
+use super::{
+    keys::{translate_logical_key, translate_physical_key},
+    PointerButtons,
+};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Error)]
 pub enum EngineError {
@@ -32,6 +39,9 @@ pub enum EngineError {
 
     #[error("Failed to shutdown the engine")]
     ShutdownFailed,
+
+    #[error("Failed to send key event")]
+    KeyEvent,
 }
 
 pub enum EngineEvent {
@@ -122,6 +132,10 @@ unsafe extern "C" fn renderer_proc_resolver(
     } else {
         std::ptr::null_mut()
     }
+}
+
+unsafe extern "C" fn keydata_callback(handled: bool, userdata: *mut std::ffi::c_void) {
+    println!("hello {handled}");
 }
 
 impl Engine {
@@ -390,7 +404,7 @@ impl Engine {
         Ok(())
     }
 
-    pub fn pointer_motion(&mut self, x: f64, y: f64, time: usize) -> anyhow::Result<()> {
+    pub fn pointer_motion(&mut self, x: f64, y: f64, time: u64) -> anyhow::Result<()> {
         let result = unsafe {
             let mut event = std::mem::zeroed::<bindings::FlutterPointerEvent>();
             event.struct_size = std::mem::size_of::<bindings::FlutterPointerEvent>();
@@ -419,18 +433,49 @@ impl Engine {
         Ok(())
     }
 
-    pub fn pointer_button(
+    pub fn pointer_axis(
         &mut self,
-        x: f64,
-        y: f64,
-        time: u32,
-        button: PointerButtons,
-        pressed: bool,
+        horizontal: u64,
+        vertical: u64,
+        time: u64,
     ) -> anyhow::Result<()> {
         let result = unsafe {
             let mut event = std::mem::zeroed::<bindings::FlutterPointerEvent>();
             event.struct_size = std::mem::size_of::<bindings::FlutterPointerEvent>();
-            event.phase = if pressed {
+            event.phase = bindings::FlutterPointerPhase_kHover;
+            event.signal_kind = bindings::FlutterPointerSignalKind_kFlutterPointerSignalKindScroll;
+            event.scroll_delta_x = horizontal as f64;
+            event.scroll_delta_y = vertical as f64;
+            event.timestamp = time as usize;
+            event.device = 69;
+            event.device_kind = bindings::FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse;
+
+            bindings::FlutterEngineSendPointerEvent(
+                self.inner,
+                &event as *const bindings::FlutterPointerEvent,
+                1,
+            )
+        };
+
+        if result != bindings::FlutterEngineResult_kSuccess {
+            return Err(EngineError::PointerEvent.into());
+        }
+
+        Ok(())
+    }
+
+    pub fn pointer_button(
+        &mut self,
+        x: f64,
+        y: f64,
+        time: u64,
+        button: PointerButtons,
+        state: KeyState,
+    ) -> anyhow::Result<()> {
+        let result = unsafe {
+            let mut event = std::mem::zeroed::<bindings::FlutterPointerEvent>();
+            event.struct_size = std::mem::size_of::<bindings::FlutterPointerEvent>();
+            event.phase = if state == KeyState::Pressed {
                 bindings::FlutterPointerPhase_kDown
             } else {
                 bindings::FlutterPointerPhase_kUp
@@ -462,6 +507,42 @@ impl Engine {
                 self.inner,
                 &event as *const bindings::FlutterPointerEvent,
                 1,
+            )
+        };
+
+        if result != bindings::FlutterEngineResult_kSuccess {
+            return Err(EngineError::PointerEvent.into());
+        }
+
+        Ok(())
+    }
+
+    pub fn key_press(
+        &mut self,
+        symbol: xkeysym::Keysym,
+        time: u32,
+        state: KeyState,
+    ) -> anyhow::Result<()> {
+        let result = unsafe {
+            let mut event = std::mem::zeroed::<bindings::FlutterKeyEvent>();
+            event.struct_size = std::mem::size_of::<bindings::FlutterKeyEvent>();
+
+            if state == KeyState::Pressed {
+                event.type_ = bindings::FlutterKeyEventType_kFlutterKeyEventTypeDown;
+                event.character = symbol.name().unwrap().as_bytes().as_ptr() as *const i8;
+            } else {
+                event.type_ = bindings::FlutterKeyEventType_kFlutterKeyEventTypeUp;
+            }
+            event.synthesized = false;
+            event.timestamp = time as f64;
+            event.logical = translate_logical_key(symbol).unwrap();
+            event.physical = translate_physical_key(symbol).unwrap();
+
+            bindings::FlutterEngineSendKeyEvent(
+                self.inner,
+                &event,
+                Some(keydata_callback),
+                std::ptr::null_mut(),
             )
         };
 

@@ -45,7 +45,7 @@ impl Lifecycle {
 impl crate::engine::Plugin for Lifecycle {
     fn init(
         &mut self,
-        _shell: Arc<Mutex<dyn Shell>>,
+        _shell: &mut Box<dyn Shell>,
         tx: Sender<EngineRequest>,
     ) -> anyhow::Result<()> {
         self.tx = Some(tx);

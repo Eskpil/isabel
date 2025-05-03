@@ -1,8 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use smithay_client_toolkit::reexports::calloop::channel::{channel, Event, Sender};
+use smithay_client_toolkit::reexports::calloop::channel::{
+    channel, Channel, Event as ChannelEvent, Sender,
+};
 
 use crate::backend::Surface;
+use crate::event::Event;
+use crate::sm::KeyState;
 use crate::Application;
 use crate::{shell::LoopHandle, tasks::TaskRunner};
 
@@ -13,26 +17,33 @@ use super::{
     engine::Engine,
     Bundle, InstanceError, Plugin,
 };
-use super::{EngineRequest, InstanceState};
+use super::{EngineRequest, InstanceState, Shell};
 
 pub struct Instance {
     engine: Engine,
     source: Option<EngineSource>,
+    rx: Option<Channel<Event>>,
 
     plugins: Vec<Box<dyn Plugin>>,
 }
 
 impl Instance {
+    pub fn channels() -> (Sender<Event>, Channel<Event>) {
+        channel()
+    }
+
     pub fn new(
         surface: Surface,
         bundle: Bundle,
         task_runner: TaskRunner,
+        rx: Channel<Event>,
         entry: Option<String>,
     ) -> anyhow::Result<Self> {
         let engine = Engine::new(surface, bundle.assets, bundle.icu_data, task_runner, entry)?;
         let mut instance = Self {
             engine: engine.0,
             source: Some(engine.1),
+            rx: Some(rx),
 
             plugins: vec![],
         };
@@ -82,7 +93,7 @@ impl Instance {
         &mut self.engine
     }
 
-    pub fn key_press(&mut self, symbol: xkeysym::Keysym) -> anyhow::Result<()> {
+    pub fn textinput_key_press(&mut self, symbol: xkeysym::Keysym) -> anyhow::Result<()> {
         let plugin = self
             .plugins
             .iter_mut()
@@ -94,13 +105,28 @@ impl Instance {
         Ok(())
     }
 
+    pub fn key_press(
+        &mut self,
+        symbol: xkeysym::Keysym,
+        time: u64,
+        state: KeyState,
+    ) -> anyhow::Result<()> {
+        self.engine_mut().key_press(symbol, time as u32, state)?;
+
+        if state == KeyState::Released {
+            self.textinput_key_press(symbol)?;
+        }
+
+        Ok(())
+    }
+
     pub fn preload_plugins(
         &mut self,
-        shell: Arc<Mutex<dyn super::Shell>>,
+        shell: &mut Box<dyn Shell>,
         tx: Sender<EngineRequest>,
     ) -> anyhow::Result<()> {
         for plugin in &mut self.plugins {
-            plugin.init(shell.clone(), tx.clone())?;
+            plugin.init(shell, tx.clone())?;
         }
 
         Ok(())
@@ -113,58 +139,131 @@ impl Instance {
 
         Ok(())
     }
-
     pub fn run<'a>(
         mut self,
         handle: &LoopHandle<'a, Application<'static>>,
-        shell: Arc<Mutex<dyn super::Shell>>,
+        mut shell: Box<dyn Shell>,
     ) -> anyhow::Result<()> {
         let (tx, rx) = channel();
-        self.preload_plugins(Arc::clone(&shell), tx)?;
+        self.preload_plugins(&mut shell, tx)?;
         self.engine.run()?;
-
         self.state_updated(InstanceState::Running)?;
 
         let engine_source = self.source.take().unwrap();
+
         let instance = Arc::new(Mutex::new(self));
-        let instance2 = instance.clone();
 
+        Self::setup_engine_event_handler(handle, engine_source, instance.clone())?;
+        Self::setup_engine_request_handler(handle, rx, instance.clone())?;
+        Self::setup_shell_event_handler(handle, instance)?;
+
+        Ok(())
+    }
+
+    fn handle_shell_event(
+        instance: &mut Self,
+        event: Event,
+        app: &mut Application<'static>,
+    ) -> anyhow::Result<()> {
+        match event {
+            Event::Exit => {}
+            Event::Hide => {}
+            Event::Show => {}
+            Event::Key {
+                state,
+                symbol,
+                time,
+            } => instance.key_press(symbol, time, state)?,
+            Event::PointerAxis {
+                vertical,
+                horizontal,
+                time,
+            } => instance
+                .engine_mut()
+                .pointer_axis(horizontal, vertical, time)?,
+            Event::PointerButton {
+                x,
+                y,
+                time,
+                button,
+                state,
+            } => instance
+                .engine_mut()
+                .pointer_button(x, y, time, button, state)?,
+            Event::PointerEnter { x, y } => instance.engine_mut().pointer_enter(x, y)?,
+            Event::PointerLeave {} => instance.engine_mut().pointer_leave()?,
+            Event::PointerMotion { x, y, time } => {
+                instance.engine_mut().pointer_motion(x, y, time)?
+            }
+            Event::Resize {
+                width,
+                height,
+                scale,
+            } => instance.engine_mut().resize(width, height)?,
+        }
+
+        Ok(())
+    }
+
+    fn setup_shell_event_handler<'a>(
+        handle: &LoopHandle<'a, Application<'static>>,
+        instance: Arc<Mutex<Self>>,
+    ) -> anyhow::Result<()> {
+        let rx = instance.lock().unwrap().rx.take().unwrap();
         handle
-            .insert_source(engine_source, move |event, _, a| match event {
-                EngineEvent::PlatformMessage { channel, data } => {
-                    let mut instance = instance2.lock().unwrap();
-                    let plugin = instance
-                        .plugins
-                        .iter_mut()
-                        .find(|p| p.on().to_owned() == channel);
-
-                    match plugin {
-                        Some(plugin) => {
-                            plugin.handle(a, data).expect("could not handle message");
-                        }
-                        None => {}
-                    }
+            .insert_source(rx, move |event, _, app| {
+                if let ChannelEvent::Msg(e) = event {
+                    Self::handle_shell_event(&mut instance.lock().unwrap(), e, app)
+                        .expect("failed");
                 }
             })
-            .expect("could not insert");
+            .expect("insert handle failed");
 
-        let instance3 = instance.clone();
+        Ok(())
+    }
+
+    fn setup_engine_event_handler<'a>(
+        handle: &LoopHandle<'a, Application<'static>>,
+        engine_source: EngineSource,
+        instance: Arc<Mutex<Self>>,
+    ) -> anyhow::Result<()> {
         handle
-            .insert_source(rx, move |e, _, _| {
-                if let Event::Msg(e) = e {
-                    match e {
-                        EngineRequest::Publish { channel, data } => {
-                            println!("thread: {:?}", std::thread::current().id());
+            .insert_source(engine_source, move |event, _, app| {
+                let EngineEvent::PlatformMessage { channel, data } = event;
+                Self::handle_platform_message(&mut instance.lock().unwrap(), channel, data, app);
+            })
+            .expect("insert failed");
 
-                            let mut instance = instance3.lock().unwrap();
-                            instance.engine.publish(channel, data);
-                        }
-                    }
+        Ok(())
+    }
+
+    fn handle_platform_message(
+        instance: &mut Self,
+        channel: String,
+        data: Vec<u8>,
+        app: &mut Application<'static>,
+    ) {
+        if let Some(plugin) = instance
+            .plugins
+            .iter_mut()
+            .find(|p| p.on().to_owned() == channel)
+        {
+            plugin.handle(app, data).expect("could not handle message");
+        }
+    }
+
+    fn setup_engine_request_handler<'a>(
+        handle: &LoopHandle<'a, Application<'static>>,
+        rx: Channel<EngineRequest>,
+        instance: Arc<Mutex<Self>>,
+    ) -> anyhow::Result<()> {
+        handle
+            .insert_source(rx, move |event, _, _| {
+                if let ChannelEvent::Msg(EngineRequest::Publish { channel, data }) = event {
+                    instance.lock().unwrap().engine.publish(channel, data);
                 }
             })
-            .expect("could not insert");
-
-        shell.lock().unwrap().set_instance(instance);
+            .expect("insert source failed");
 
         Ok(())
     }

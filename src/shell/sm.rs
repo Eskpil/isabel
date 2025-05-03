@@ -49,11 +49,8 @@ use std::{
 
 use super::{
     channel::{channel, Event, Sender},
-    layershell::LayerSurface,
-    popup::Popup,
     positioner::Positioner,
     util,
-    window::Window,
 };
 
 use crate::{app::Application, backend::Backend, engine::PointerButtons};
@@ -81,7 +78,15 @@ pub trait State {
     fn pointer_enter(&mut self, x: f64, y: f64);
     fn pointer_leave(&mut self);
     fn pointer_motion(&mut self, x: f64, y: f64, time: usize);
-    fn pointer_button(&mut self, x: f64, y: f64, time: u32, button: PointerButtons, pressed: bool);
+    fn pointer_button(
+        &mut self,
+        x: f64,
+        y: f64,
+        time: u32,
+        button: PointerButtons,
+        state: KeyState,
+    );
+    fn pointer_axis(&mut self, horizontal: u64, vertical: u64, time: u32);
 }
 
 pub enum RecreateRequest {
@@ -127,6 +132,7 @@ pub struct SurfaceManager<'a> {
 
     counter: usize,
 
+    //states: HashMap<usize, Box<dyn State>>,
     states: HashMap<usize, Arc<Mutex<dyn State>>>,
     surface_id_to_id: HashMap<ObjectId, usize>,
 }
@@ -216,9 +222,7 @@ where
                             };
 
                             a.surface_id_to_id.insert(surface_id.clone(), id);
-                            let state = a.state_mut(&surface_id);
-                            let mut state = state.lock().unwrap();
-                            state.map(response);
+                            a.state_mut(&surface_id).lock().unwrap().map(response);
                         }
                         Request::Unmap { id } => {
                             a.surface_id_to_id.remove(&id);
@@ -262,9 +266,9 @@ where
         })
     }
 
-    pub fn state_mut(&mut self, id: &ObjectId) -> Arc<Mutex<dyn State>> {
+    pub fn state_mut(&mut self, id: &ObjectId) -> &mut Arc<Mutex<dyn State + 'a>> {
         let id = self.surface_id_to_id[id];
-        self.states[&id].clone()
+        self.states.get_mut(&id).unwrap()
     }
 
     pub fn has_state(&mut self, id: &ObjectId) -> bool {
@@ -289,68 +293,63 @@ where
         Ok(Positioner::new(xdg_positioner))
     }
 
-    pub fn prepare_popup(&mut self) -> anyhow::Result<Arc<Mutex<Popup>>> {
-        let id = self.counter.clone();
-        let dummy = self.compositor_state.create_surface(&self.qh);
-        let popup = Popup::new(id, self.tx.clone(), self.backend, &dummy)?;
-        let popup = Arc::new(Mutex::new(popup));
+    //pub fn prepare_popup(&mut self) -> anyhow::Result<Arc<Mutex<Popup>>> {
+    //    let id = self.counter.clone();
+    //    let dummy = self.compositor_state.create_surface(&self.qh);
+    //    let popup = Popup::new(id, self.tx.clone(), self.backend, &dummy)?;
+    //    let popup = Arc::new(Mutex::new(popup));
 
-        self.states.insert(id, popup.clone());
-        self.counter += 1;
+    //    self.states.insert(id, popup.clone());
+    //    self.counter += 1;
 
-        Ok(popup)
-    }
+    //    Ok(popup)
+    //}
 
-    pub fn create_window(
-        &mut self,
-        width: usize,
-        height: usize,
-    ) -> anyhow::Result<Arc<Mutex<Window>>> {
+    pub(crate) fn create_xdg_window(&mut self) -> anyhow::Result<XdgWindow> {
         let surface = self.compositor_state.create_surface(&self.qh);
-        let surface_id = surface.id();
+
         let xdg_window = self
             .xdg_shell
             .create_window(surface, WindowDecorations::None, &self.qh);
 
-        xdg_window.set_min_size(Some((width as u32, height as u32)));
-        xdg_window.commit();
-
-        let tx = self.tx.clone();
-        let id = self.counter.clone();
-
-        let window = Window::new(id, tx, self.backend, xdg_window)?;
-        let window = Arc::new(Mutex::new(window));
-
-        self.states.insert(id, window.clone());
-        self.surface_id_to_id.insert(surface_id, id);
-        self.counter += 1;
-
-        Ok(window)
+        Ok(xdg_window)
     }
 
-    pub fn create_layer(
+    pub(crate) fn next_id(&mut self) -> usize {
+        let id = self.counter.clone();
+        self.counter += 1;
+        id
+    }
+
+    pub(crate) fn tx(&mut self) -> Sender<Request> {
+        self.tx.clone()
+    }
+
+    pub(crate) fn backend(&mut self) -> Backend {
+        self.backend
+    }
+
+    pub(crate) fn insert_state(
+        &mut self,
+        id: usize,
+        surface_id: &ObjectId,
+        state: Arc<Mutex<dyn State>>,
+    ) {
+        self.states.insert(id, state);
+        self.surface_id_to_id.insert(surface_id.clone(), id);
+    }
+
+    pub(crate) fn create_layer_surface(
         &mut self,
         layer: smithay_client_toolkit::shell::wlr_layer::Layer,
         namespace: String,
-    ) -> anyhow::Result<Arc<Mutex<LayerSurface>>> {
+    ) -> anyhow::Result<WlrLayerSurface> {
         let surface = self.compositor_state.create_surface(&self.qh);
-        let surface_id = surface.id();
-
         let wlr_layer_surface =
             self.layershell
                 .create_layer_surface(&self.qh, surface, layer, Some(namespace), None);
 
-        let tx = self.tx.clone();
-        let id = self.counter.clone();
-
-        let layer_surface = LayerSurface::new(id, tx, self.backend, wlr_layer_surface)?;
-        let layer_surface = Arc::new(Mutex::new(layer_surface));
-
-        self.states.insert(id, layer_surface.clone());
-        self.surface_id_to_id.insert(surface_id, id);
-        self.counter += 1;
-
-        Ok(layer_surface)
+        Ok(wlr_layer_surface)
     }
 }
 
@@ -631,8 +630,20 @@ where
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _: u32,
-        _event: KeyEvent,
+        event: KeyEvent,
     ) {
+        match self.active_keyboard.clone() {
+            Some(id) => {
+                if !self.has_state(&id) {
+                    return;
+                }
+
+                let state = self.state_mut(&id);
+                let mut state = state.lock().unwrap();
+                state.key_event(&event, KeyState::Released);
+            }
+            None => {}
+        };
     }
 
     fn update_modifiers(
@@ -673,36 +684,58 @@ where
                 continue;
             }
 
-            let state = self.state_mut(&event.surface.id());
-            let mut state = state.lock().unwrap();
-
             match &event.kind {
                 Enter { serial } => {
                     self.last_enter_serial = *serial;
+
+                    let state = self.state_mut(&event.surface.id());
+                    let mut state = state.lock().unwrap();
                     state.pointer_enter(event.position.0, event.position.0);
                 }
-                Leave { .. } => state.pointer_leave(),
+                Leave { .. } => {
+                    let state = self.state_mut(&event.surface.id());
+                    let mut state = state.lock().unwrap();
+                    state.pointer_leave()
+                }
                 Motion { time } => {
+                    let state = self.state_mut(&event.surface.id());
+                    let mut state = state.lock().unwrap();
                     state.pointer_motion(event.position.0, event.position.1, *time as usize)
                 }
                 Press { time, button, .. } => {
+                    let state = self.state_mut(&event.surface.id());
+                    let mut state = state.lock().unwrap();
                     state.pointer_button(
                         event.position.0,
                         event.position.1,
                         *time,
                         map_event_code(*button),
-                        true,
+                        KeyState::Pressed,
                     );
                 }
-                Release { time, button, .. } => state.pointer_button(
-                    event.position.0,
-                    event.position.1,
-                    *time,
-                    map_event_code(*button),
-                    false,
-                ),
+                Release { time, button, .. } => {
+                    let state = self.state_mut(&event.surface.id());
+                    let mut state = state.lock().unwrap();
 
-                o => todo!("implement pointer event: {:?}", o),
+                    state.pointer_button(
+                        event.position.0,
+                        event.position.1,
+                        *time,
+                        map_event_code(*button),
+                        KeyState::Released,
+                    )
+                }
+                Axis {
+                    time,
+                    horizontal,
+                    vertical,
+                    source,
+                } => {
+                    let state = self.state_mut(&event.surface.id());
+                    let mut state = state.lock().unwrap();
+
+                    state.pointer_axis(horizontal.absolute as u64, vertical.absolute as u64, *time);
+                }
             };
         }
     }

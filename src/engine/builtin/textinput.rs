@@ -216,7 +216,6 @@ pub(super) enum TextInputClient {
 
 fn publish<T: Serialize>(channel: String, data: &T, tx: &Sender<EngineRequest>) {
     let data = serde_json::ser::to_vec(data).expect("could not serialize");
-
     tx.send(EngineRequest::Publish { channel, data }).unwrap();
 }
 
@@ -329,11 +328,7 @@ impl Textinput {
 }
 
 impl crate::engine::Plugin for Textinput {
-    fn init(
-        &mut self,
-        _shell: Arc<Mutex<dyn Shell>>,
-        tx: Sender<EngineRequest>,
-    ) -> anyhow::Result<()> {
+    fn init(&mut self, _: &mut Box<dyn Shell>, tx: Sender<EngineRequest>) -> anyhow::Result<()> {
         self.tx = Some(tx);
         Ok(())
     }

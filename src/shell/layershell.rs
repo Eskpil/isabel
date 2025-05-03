@@ -17,11 +17,17 @@ use wayland_client::Proxy;
 use crate::{
     backend::{Backend, Surface},
     engine::{self, PointerButtons, Shell},
+    Application,
 };
 
-use super::sm::{KeyState, PopupParent, RecreateRequest, RecreateResponse, Request, State};
+use super::{
+    event::Event,
+    sm::{KeyState, PopupParent, RecreateRequest, RecreateResponse, Request, State},
+};
 
-pub struct LayerSurface {
+pub(crate) struct LayerSurfaceInner {
+    display_tx: Sender<Event>,
+
     backend: Backend,
     surface: Surface,
     instance: Option<Arc<Mutex<engine::Instance>>>,
@@ -35,10 +41,73 @@ pub struct LayerSurface {
     inner: Option<WlrLayerSurface>,
 }
 
+pub struct LayerSurface {
+    inner: Arc<Mutex<LayerSurfaceInner>>,
+}
+
 impl LayerSurface {
     pub fn new(
+        app: &mut Application<'static>,
+        display_tx: Sender<Event>,
+        layer: Layer,
+        namespace: impl Into<String>,
+    ) -> anyhow::Result<Self> {
+        let sm = &mut app.lock().sm;
+        let wlr_layer_surface = sm.create_layer_surface(layer, namespace.into())?;
+
+        let id = sm.next_id();
+        let surface_id = wlr_layer_surface.wl_surface().id();
+
+        let inner =
+            LayerSurfaceInner::new(id, sm.tx(), display_tx, sm.backend(), wlr_layer_surface)?;
+
+        let layer_surface = Self {
+            inner: Arc::new(Mutex::new(inner)),
+        };
+
+        sm.insert_state(id, &surface_id, layer_surface.inner.clone());
+
+        Ok(layer_surface)
+    }
+
+    pub fn set_anchor(&mut self, anchor: Anchor) {
+        self.inner.lock().unwrap().set_anchor(anchor);
+    }
+
+    pub fn set_exclusive_zone(&mut self, zone: i32) {
+        self.inner.lock().unwrap().set_exclusive_zone(zone);
+    }
+
+    pub fn set_keyboard_interactivity(&mut self, value: KeyboardInteractivity) {
+        self.inner.lock().unwrap().set_keyboard_interactivity(value);
+    }
+
+    pub fn set_layer(&mut self, layer: Layer) {
+        self.inner.lock().unwrap().set_layer(layer);
+    }
+
+    pub fn set_size(&mut self, width: usize, height: usize) {
+        self.inner.lock().unwrap().set_size(width, height);
+    }
+
+    pub fn commit(&mut self) {
+        self.inner.lock().unwrap().commit();
+    }
+
+    fn hide(&mut self) -> anyhow::Result<()> {
+        self.inner.lock().unwrap().hide()
+    }
+
+    fn show(&mut self) -> anyhow::Result<()> {
+        self.inner.lock().unwrap().show()
+    }
+}
+
+impl LayerSurfaceInner {
+    pub fn new(
         id: usize,
-        tx: Sender<Request>,
+        sm_tx: Sender<Request>,
+        display_tx: Sender<Event>,
         backend: Backend,
         inner: WlrLayerSurface,
     ) -> anyhow::Result<Self> {
@@ -50,7 +119,8 @@ impl LayerSurface {
             id,
             backend,
             surface,
-            tx,
+            tx: sm_tx,
+            display_tx,
             inner: Some(inner),
             instance: None,
             width: 0,
@@ -97,7 +167,7 @@ impl LayerSurface {
     }
 
     fn hide(&mut self) -> anyhow::Result<()> {
-        self.instance().lock().unwrap().hide();
+        self.display_tx.send(Event::Hide).unwrap();
         self.pointer_leave();
 
         self.surface.clear();
@@ -117,13 +187,13 @@ impl LayerSurface {
             })
             .unwrap();
 
-        self.instance().lock().unwrap().show();
+        self.display_tx.send(Event::Show).unwrap();
 
         Ok(())
     }
 }
 
-impl State for LayerSurface {
+impl State for LayerSurfaceInner {
     fn id(&self) -> usize {
         self.id.clone()
     }
@@ -146,9 +216,7 @@ impl State for LayerSurface {
     }
 
     fn exit(&mut self) {
-        if self.instance.is_some() {
-            self.instance().lock().unwrap().engine_mut().exit().unwrap();
-        }
+        self.display_tx.send(Event::Exit).unwrap();
     }
 
     fn resize(&mut self, width: usize, height: usize, dx: usize, dy: usize) {
@@ -159,58 +227,60 @@ impl State for LayerSurface {
             .resize(width, height, dx, dy)
             .expect("could not resize");
 
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .resize(width, height)
-                .unwrap();
-        }
+        self.display_tx
+            .send(Event::Resize {
+                width,
+                height,
+                scale: 1 as f64,
+            })
+            .unwrap();
     }
 
     fn pointer_enter(&mut self, x: f64, y: f64) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_enter(x, y)
-                .unwrap();
-        }
+        self.display_tx.send(Event::PointerEnter { x, y }).unwrap();
     }
 
     fn pointer_leave(&mut self) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_leave()
-                .unwrap();
-        }
+        self.display_tx.send(Event::PointerLeave {}).unwrap();
     }
 
     fn pointer_motion(&mut self, x: f64, y: f64, time: usize) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_motion(x, y, time)
-                .unwrap();
-        }
+        self.display_tx
+            .send(Event::PointerMotion {
+                x,
+                y,
+                time: time as u64,
+            })
+            .unwrap();
     }
 
-    fn pointer_button(&mut self, x: f64, y: f64, time: u32, button: PointerButtons, pressed: bool) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_button(x, y, time, button, pressed)
-                .unwrap();
-        }
+    fn pointer_button(
+        &mut self,
+        x: f64,
+        y: f64,
+        time: u32,
+        button: PointerButtons,
+        state: KeyState,
+    ) {
+        self.display_tx
+            .send(Event::PointerButton {
+                state,
+                x,
+                y,
+                time: time as u64,
+                button,
+            })
+            .unwrap();
+    }
+
+    fn pointer_axis(&mut self, horizontal: u64, vertical: u64, time: u32) {
+        self.display_tx
+            .send(Event::PointerAxis {
+                horizontal,
+                vertical,
+                time: time as u64,
+            })
+            .unwrap();
     }
 
     fn key_event(
@@ -218,43 +288,31 @@ impl State for LayerSurface {
         event: &smithay_client_toolkit::seat::keyboard::KeyEvent,
         state: KeyState,
     ) {
-        if self.instance.is_some() {
-            if state == KeyState::Pressed {
-                self.instance()
-                    .lock()
-                    .unwrap()
-                    .key_press(event.keysym)
-                    .unwrap();
-            }
-        }
+        self.display_tx
+            .send(Event::Key {
+                state,
+                symbol: event.keysym,
+                time: event.time as u64,
+            })
+            .unwrap();
     }
 }
 
 impl Shell for LayerSurface {
     fn surface(&self) -> Surface {
-        self.surface.clone()
+        let inner = self.inner.lock().unwrap();
+        inner.surface.clone()
     }
 
     fn parent_info(&self) -> engine::ParentInfo {
-        let parent = self.inner.as_ref().unwrap().clone();
+        let inner = self.inner.lock().unwrap();
+        let parent = inner.inner.as_ref().unwrap().clone();
 
         engine::ParentInfo {
-            width: self.width,
-            height: self.height,
+            width: inner.width,
+            height: inner.height,
             last_configure: 0,
             parent: PopupParent::LayerSurface(parent),
         }
-    }
-
-    fn set_instance(&mut self, instance: Arc<Mutex<engine::Instance>>) {
-        self.instance = Some(instance);
-    }
-
-    fn instance(&mut self) -> Arc<Mutex<engine::Instance>> {
-        if self.instance.is_none() {
-            panic!("instance not set");
-        }
-
-        Arc::clone(&self.instance.as_ref().unwrap())
     }
 }

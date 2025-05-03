@@ -1,3 +1,5 @@
+#![feature(mpmc_channel)]
+
 pub mod app;
 pub mod backend;
 pub mod codec;

@@ -4,6 +4,8 @@ use std::{
     usize,
 };
 
+use std::sync::mpmc;
+
 use raw_window_handle::{RawWindowHandle, WaylandWindowHandle};
 use smithay_client_toolkit::{
     reexports::calloop::channel::Sender,
@@ -17,14 +19,19 @@ use wayland_client::Proxy;
 use crate::{
     backend::{Backend, Surface},
     engine::{self, PointerButtons, Shell},
+    Application,
 };
 
-use super::sm::{KeyState, PopupParent, RecreateRequest, RecreateResponse, Request, State};
+use super::{
+    event::Event,
+    sm::{KeyState, PopupParent, RecreateRequest, RecreateResponse, Request, State},
+};
 
-pub struct Window {
+pub struct WindowInner {
+    display_tx: Sender<Event>,
+
     backend: Backend,
     surface: Surface,
-    instance: Option<Arc<Mutex<engine::Instance>>>,
 
     tx: Sender<Request>,
 
@@ -38,26 +45,34 @@ pub struct Window {
     window: Option<XdgWindow>,
 }
 
-impl Window {
+#[derive(Clone)]
+pub struct Window {
+    inner: Arc<Mutex<WindowInner>>,
+}
+
+impl WindowInner {
     pub fn new(
         id: usize,
-        tx: Sender<Request>,
+        display_tx: Sender<Event>,
+        xdg_window: XdgWindow,
         backend: Backend,
-        window: XdgWindow,
+        sm_tx: Sender<Request>,
     ) -> anyhow::Result<Self> {
-        let ptr = NonNull::new(window.wl_surface().id().as_ptr() as *mut std::ffi::c_void).unwrap();
+        let ptr =
+            NonNull::new(xdg_window.wl_surface().id().as_ptr() as *mut std::ffi::c_void).unwrap();
         let handle = WaylandWindowHandle::new(ptr);
         let surface = Surface::new(backend, &RawWindowHandle::Wayland(handle), 1, 1)?;
 
         Ok(Self {
+            display_tx,
+
             id,
             surface,
             backend,
-            tx,
+            tx: sm_tx,
             title: String::from(""),
             app_id: String::from(""),
-            window: Some(window),
-            instance: None,
+            window: Some(xdg_window),
             width: 0,
             height: 0,
         })
@@ -76,9 +91,6 @@ impl Window {
     }
 
     fn hide(&mut self) -> anyhow::Result<()> {
-        self.instance().lock().unwrap().hide();
-        self.pointer_leave();
-
         self.surface.clear();
 
         let id = self.window.as_ref().unwrap().wl_surface().id();
@@ -98,13 +110,48 @@ impl Window {
             })
             .unwrap();
 
-        self.instance().lock().unwrap().show();
-
         Ok(())
     }
 }
 
-impl State for Window {
+impl Window {
+    pub fn new(
+        app: &mut Application<'static>,
+        display_tx: Sender<Event>,
+        width: usize,
+        height: usize,
+    ) -> anyhow::Result<Self> {
+        let sm = &mut app.lock().sm;
+
+        let xdg_window = sm.create_xdg_window()?;
+        xdg_window.set_min_size(Some((width as u32, height as u32)));
+        xdg_window.commit();
+
+        let id = sm.next_id();
+
+        let surface_id = xdg_window.wl_surface().id();
+
+        let inner = WindowInner::new(id, display_tx, xdg_window, sm.backend(), sm.tx())?;
+
+        let window = Window {
+            inner: Arc::new(Mutex::new(inner)),
+        };
+
+        sm.insert_state(id, &surface_id, window.inner.clone());
+
+        Ok(window)
+    }
+
+    pub fn set_title(&mut self, title: impl Into<String>) {
+        self.inner.lock().unwrap().set_title(title.into());
+    }
+
+    pub fn set_app_id(&mut self, app_id: impl Into<String>) {
+        self.inner.lock().unwrap().set_app_id(app_id.into());
+    }
+}
+
+impl State for WindowInner {
     fn id(&self) -> usize {
         self.id.clone()
     }
@@ -127,9 +174,7 @@ impl State for Window {
     }
 
     fn exit(&mut self) {
-        if self.instance.is_some() {
-            self.instance().lock().unwrap().engine_mut().exit().unwrap();
-        }
+        self.display_tx.send(Event::Exit).unwrap();
     }
 
     fn resize(&mut self, width: usize, height: usize, dx: usize, dy: usize) {
@@ -140,58 +185,60 @@ impl State for Window {
             .resize(width, height, dx, dy)
             .expect("could not resize");
 
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .resize(width, height)
-                .unwrap();
-        }
+        self.display_tx
+            .send(Event::Resize {
+                width,
+                height,
+                scale: 1 as f64,
+            })
+            .unwrap();
     }
 
     fn pointer_enter(&mut self, x: f64, y: f64) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_enter(x, y)
-                .unwrap();
-        }
+        self.display_tx.send(Event::PointerEnter { x, y }).unwrap();
     }
 
     fn pointer_leave(&mut self) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_leave()
-                .unwrap();
-        }
+        self.display_tx.send(Event::PointerLeave {}).unwrap();
     }
 
     fn pointer_motion(&mut self, x: f64, y: f64, time: usize) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_motion(x, y, time)
-                .unwrap();
-        }
+        self.display_tx
+            .send(Event::PointerMotion {
+                x,
+                y,
+                time: time as u64,
+            })
+            .unwrap();
     }
 
-    fn pointer_button(&mut self, x: f64, y: f64, time: u32, button: PointerButtons, pressed: bool) {
-        if self.instance.is_some() {
-            self.instance()
-                .lock()
-                .unwrap()
-                .engine_mut()
-                .pointer_button(x, y, time, button, pressed)
-                .unwrap();
-        }
+    fn pointer_button(
+        &mut self,
+        x: f64,
+        y: f64,
+        time: u32,
+        button: PointerButtons,
+        state: KeyState,
+    ) {
+        self.display_tx
+            .send(Event::PointerButton {
+                state,
+                x,
+                y,
+                time: time as u64,
+                button,
+            })
+            .unwrap();
+    }
+
+    fn pointer_axis(&mut self, horizontal: u64, vertical: u64, time: u32) {
+        self.display_tx
+            .send(Event::PointerAxis {
+                horizontal,
+                vertical,
+                time: time as u64,
+            })
+            .unwrap();
     }
 
     fn key_event(
@@ -199,43 +246,31 @@ impl State for Window {
         event: &smithay_client_toolkit::seat::keyboard::KeyEvent,
         state: KeyState,
     ) {
-        if self.instance.is_some() {
-            if state == KeyState::Pressed {
-                self.instance()
-                    .lock()
-                    .unwrap()
-                    .key_press(event.keysym)
-                    .unwrap();
-            }
-        }
+        self.display_tx
+            .send(Event::Key {
+                state,
+                symbol: event.keysym,
+                time: event.time as u64,
+            })
+            .unwrap();
     }
 }
 
 impl Shell for Window {
     fn surface(&self) -> Surface {
-        self.surface.clone()
+        let inner = self.inner.lock().unwrap();
+        inner.surface.clone()
     }
 
     fn parent_info(&self) -> engine::ParentInfo {
-        let xdg_surface = self.window.as_ref().unwrap().xdg_surface().clone();
+        let inner = self.inner.lock().unwrap();
+        let xdg_surface = inner.window.as_ref().unwrap().xdg_surface().clone();
 
         engine::ParentInfo {
-            width: self.width,
-            height: self.height,
+            width: inner.width,
+            height: inner.height,
             last_configure: 0,
             parent: PopupParent::XdgSurface(xdg_surface),
         }
-    }
-
-    fn set_instance(&mut self, instance: Arc<Mutex<engine::Instance>>) {
-        self.instance = Some(instance);
-    }
-
-    fn instance(&mut self) -> Arc<Mutex<engine::Instance>> {
-        if self.instance.is_none() {
-            panic!("instance not set");
-        }
-
-        self.instance.as_ref().unwrap().clone()
     }
 }
