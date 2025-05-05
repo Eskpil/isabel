@@ -1,5 +1,6 @@
 use cursor_icon::CursorIcon;
 use raw_window_handle::{RawDisplayHandle, WaylandDisplayHandle};
+use serde::{Deserialize, Serialize};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
@@ -61,7 +62,7 @@ pub enum PopupParent {
     LayerSurface(WlrLayerSurface),
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum KeyState {
     Released,
     Pressed,
@@ -86,7 +87,7 @@ pub trait State {
         button: PointerButtons,
         state: KeyState,
     );
-    fn pointer_axis(&mut self, horizontal: u64, vertical: u64, time: u32);
+    fn pointer_axis(&mut self, horizontal: f64, vertical: f64, time: u32);
 }
 
 pub enum RecreateRequest {
@@ -734,7 +735,7 @@ where
                     let state = self.state_mut(&event.surface.id());
                     let mut state = state.lock().unwrap();
 
-                    state.pointer_axis(horizontal.absolute as u64, vertical.absolute as u64, *time);
+                    state.pointer_axis(horizontal.absolute, vertical.absolute, *time);
                 }
             };
         }

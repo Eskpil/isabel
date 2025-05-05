@@ -31,6 +31,60 @@ class SidecarRequestCreate {
   }
 }
 
+enum Key { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Esc }
+
+enum KeyState { Pressed, Released }
+
+class KeyData {
+  final Key key;
+  final KeyState state;
+
+  const KeyData({required this.key, required this.state});
+
+  factory KeyData.fromJson(Map<String, dynamic> json) {
+    return KeyData(
+      key: Key.values.firstWhere((e) => e.toString() == 'Key.${json['key']}'),
+      state: KeyState.values
+          .firstWhere((e) => e.toString() == 'KeyState.${json['state']}'),
+    );
+  }
+}
+
+class KeyEvent<T> {
+  final String method;
+  final T args;
+
+  const KeyEvent({required this.method, required this.args});
+
+  factory KeyEvent.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>) fromArgsJson,
+  ) {
+    return KeyEvent<T>(
+      method: json['method'] as String,
+      args: fromArgsJson(json['args'] as Map<String, dynamic>),
+    );
+  }
+}
+
+class Keys {
+  static const _eventChannel = EventChannel('isabel/keys', JSONMethodCodec());
+
+  Keys() {
+    _eventChannel.receiveBroadcastStream().listen(
+      (data) {
+        final map = data as Map<String, dynamic>;
+        final event =
+            KeyEvent<KeyData>.fromJson(map, (args) => KeyData.fromJson(args));
+        print('Received key: ${event.args.key}, state: ${event.args.state}');
+      },
+      onError: (error) {
+        debugPrint('Key event stream error: $error');
+      },
+    );
+  }
+}
+
 class Sidecar {
   static const platform = MethodChannel('isabel/sidecar', JSONMethodCodec());
 
@@ -70,7 +124,11 @@ class MyApp extends StatelessWidget {
 }
 
 class Scroll extends StatelessWidget {
+  final Keys keys = Keys();
+
   final ScrollController controller = ScrollController();
+
+  Scroll({super.key});
 
   @override
   Widget build(BuildContext context) {

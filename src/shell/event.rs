@@ -32,8 +32,8 @@ pub enum Event {
         scale: f64,
     },
     PointerAxis {
-        horizontal: u64,
-        vertical: u64,
+        horizontal: f64,
+        vertical: f64,
         time: u64,
     },
 

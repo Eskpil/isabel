@@ -432,8 +432,8 @@ impl Engine {
 
     pub fn pointer_axis(
         &mut self,
-        horizontal: u64,
-        vertical: u64,
+        horizontal: f64,
+        vertical: f64,
         time: u64,
     ) -> anyhow::Result<()> {
         let result = unsafe {

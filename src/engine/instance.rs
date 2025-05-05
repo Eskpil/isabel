@@ -10,7 +10,7 @@ use crate::sm::KeyState;
 use crate::Application;
 use crate::{shell::LoopHandle, tasks::TaskRunner};
 
-use super::builtin::{Lifecycle, Textinput};
+use super::builtin::{Keys, Lifecycle, Textinput};
 use super::engine::{EngineEvent, EngineSource};
 use super::{
     builtin::{self},
@@ -58,6 +58,7 @@ impl Instance {
                 .create_aot_data(bundle.aot_elf_path.unwrap())?;
         }
 
+        instance.with(Box::new(builtin::Keys::new()));
         instance.with(Box::new(builtin::Textinput::new()));
         instance.with(Box::new(builtin::Mousecursor::new()));
         instance.with(Box::new(builtin::Lifecycle::new()));
@@ -105,13 +106,25 @@ impl Instance {
         Ok(())
     }
 
+    pub fn keyevent_key(&mut self, symbol: xkeysym::Keysym, state: KeyState) -> anyhow::Result<()> {
+        let plugin = self
+            .plugins
+            .iter_mut()
+            .find(|p| p.on() == "isabel/keys")
+            .unwrap();
+        let keys = plugin.downcast_mut::<Keys>().unwrap();
+        keys.send_key(symbol, state);
+
+        Ok(())
+    }
+
     pub fn key_press(
         &mut self,
         symbol: xkeysym::Keysym,
         time: u64,
         state: KeyState,
     ) -> anyhow::Result<()> {
-        self.engine_mut().key_press(symbol, time as u32, state)?;
+        self.keyevent_key(symbol, state)?;
 
         if state == KeyState::Released {
             self.textinput_key_press(symbol)?;

@@ -4,7 +4,6 @@ use std::{
     usize,
 };
 
-
 use raw_window_handle::{RawWindowHandle, WaylandWindowHandle};
 use smithay_client_toolkit::{
     reexports::calloop::channel::Sender,
@@ -230,7 +229,7 @@ impl State for WindowInner {
             .unwrap();
     }
 
-    fn pointer_axis(&mut self, horizontal: u64, vertical: u64, time: u32) {
+    fn pointer_axis(&mut self, horizontal: f64, vertical: f64, time: u32) {
         self.display_tx
             .send(Event::PointerAxis {
                 horizontal,
